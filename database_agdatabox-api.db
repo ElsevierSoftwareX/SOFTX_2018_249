@@ -1,0 +1,5681 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 9.4.19
+-- Dumped by pg_dump version 10.3
+
+-- Started on 2019-01-31 11:41:57
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- TOC entry 9 (class 2615 OID 23265)
+-- Name: topology; Type: SCHEMA; Schema: -; Owner: postgres
+--
+
+CREATE SCHEMA topology;
+
+
+ALTER SCHEMA topology OWNER TO postgres;
+
+--
+-- TOC entry 1 (class 3079 OID 11895)
+-- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: 
+--
+
+CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
+
+
+--
+-- TOC entry 4273 (class 0 OID 0)
+-- Dependencies: 1
+-- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+
+
+--
+-- TOC entry 3 (class 3079 OID 21875)
+-- Name: postgis; Type: EXTENSION; Schema: -; Owner: 
+--
+
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public;
+
+
+--
+-- TOC entry 4274 (class 0 OID 0)
+-- Dependencies: 3
+-- Name: EXTENSION postgis; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION postgis IS 'PostGIS geometry, geography, and raster spatial types and functions';
+
+
+--
+-- TOC entry 2 (class 3079 OID 23266)
+-- Name: postgis_topology; Type: EXTENSION; Schema: -; Owner: 
+--
+
+CREATE EXTENSION IF NOT EXISTS postgis_topology WITH SCHEMA topology;
+
+
+--
+-- TOC entry 4275 (class 0 OID 0)
+-- Dependencies: 2
+-- Name: EXTENSION postgis_topology; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION postgis_topology IS 'PostGIS topology spatial types and functions';
+
+
+--
+-- TOC entry 340 (class 1255 OID 20892)
+-- Name: f_atualizaarea(); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_atualizaarea() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+
+declare
+  v_tamanho  float;
+  local_srid integer;
+  v_longcentral float;
+  v_latcentral float;
+  v_codarea integer;
+begin
+       v_codarea := NEW.codigo;
+       raise notice 'o codigo da are é: %', v_codarea;
+       execute 'select st_x(st_centroid(geometry)), st_y(st_centroid(geometry)) from area
+               where codigo = '||v_codarea into v_longcentral, v_latcentral;
+      select f_buscadatum_utm(v_longcentral, v_latcentral) into local_srid;
+      execute 'select st_area(st_transform(geometry, '||local_srid||'))/10000 from area 
+               where codigo = '||v_codarea into v_tamanho;
+     execute 'update area set tamanho = '||v_tamanho||' where codigo = '||v_codarea;
+     return NULL;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_atualizaarea() OWNER TO api;
+
+--
+-- TOC entry 341 (class 1255 OID 20893)
+-- Name: f_atualizaarea2(integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_atualizaarea2(p_codarea integer) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_tamanho  float;
+  local_srid integer;
+  v_longcentral float;
+  v_latcentral float;
+begin
+       execute 'select st_x(st_centroid(geometry)), st_y(st_centroid(geometry)) from area
+               where codigo = '||p_codarea into v_longcentral, v_latcentral;
+      select f_buscadatum_utm(v_longcentral, v_latcentral) into local_srid;
+      execute 'select st_area(st_transform(geometry, '||local_srid||'))/10000 from area 
+               where codigo ='||p_codarea into v_tamanho;
+     execute 'update area set tamanho = '||v_tamanho||' where codigo = '||p_codarea;
+     return true;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_atualizaarea2(p_codarea integer) OWNER TO api;
+
+--
+-- TOC entry 342 (class 1255 OID 20894)
+-- Name: f_buscadatum_utm(double precision, double precision); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_buscadatum_utm(long double precision, lat double precision) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    V_UTM_NORTE INTEGER[];
+    V_UTM_SUL   INTEGER[];
+    V_GOMO INTEGER;
+BEGIN
+    V_UTM_NORTE := ARRAY[32601, 32602, 32603, 32604, 32605, 32606, 32607, 32608, 32609, 32610, 32611, 32612, 32613, 
+                         32614, 32615, 32616, 32617, 32618, 32619, 32620, 32621, 32622, 32623, 32624, 32625, 32626, 
+                         32627, 32628, 32629, 32630, 32631, 32632, 32633, 32634, 32635, 32636, 32637, 32638, 32639, 
+                         32640, 32641, 32642, 32643, 32644, 32645, 32646, 32647, 32648, 32649, 32650, 32651, 32652, 
+                         32653, 32654, 32655, 32656, 32657, 32658, 32659, 32660];
+                        
+    V_UTM_SUL := ARRAY[32701, 32702, 32703, 32704, 32705, 32706, 32707, 32708, 32709, 32710, 32711, 32712, 32713, 
+                       32714, 32715, 32716, 32717, 32718, 32719, 32720, 32721, 32722, 32723, 32724, 32725, 32726, 
+                       32727, 32728, 32729, 32730, 32731, 32732, 32733, 32734, 32735, 32736, 32737, 32738, 32739, 
+                       32740, 32741, 32742, 32743, 32744, 32745, 32746, 32747, 32748, 32749, 32750, 32751, 32752, 
+                       32753, 32754, 32755, 32756, 32757, 32758, 32759, 32760];                 
+
+    IF LONG >=0 THEN
+      V_GOMO := 31 + TRUNC(ABS(LONG)/6);
+    ELSE 
+      V_GOMO := 31 - TRUNC(ABS(LONG)/6);
+    END IF;
+    RAISE NOTICE 'CODIGO:%', V_GOMO;
+
+    IF LAT >= 0 THEN
+       return V_UTM_NORTE[V_GOMO];
+    ELSE 
+       return V_UTM_SUL[V_GOMO];
+    END IF;
+END;
+$$;
+
+
+ALTER FUNCTION public.f_buscadatum_utm(long double precision, lat double precision) OWNER TO api;
+
+--
+-- TOC entry 349 (class 1255 OID 20895)
+-- Name: f_cria_mapa(text, double precision, text, integer, double precision, text, text, double precision, double precision, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_cria_mapa(p_descricaomapa text, p_expoente double precision, p_nometabelapixels text, p_npontos integer, p_tamanhoraio double precision, p_tipogeometria text, p_tipointerpolador text, p_tam_x double precision, p_tam_y double precision, p_amostracodigo integer, p_areacodigo integer, p_atributocodigo integer) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+   v_sql   text;
+   v_codmapa integer;
+   v_resultgrade boolean;
+begin
+        v_sql := 'insert into mapa (descricao, expoente, nomedatabela, numeropontos, tamanhoraio, tipogeometria, 
+                 tipointerpolador, x, y, amostra_codigo, area_codigo, alcance, comp_principal, data, efeitopepita,
+                 modelo, patamar, usuario) values ('''||p_descricaomapa||
+                 ''', '||p_expoente||', '''||p_nometabelapixels||''', '||p_npontos||', '||p_tamanhoraio||', '''
+                 ||p_tipogeometria||''', '''||p_tipointerpolador||''', '||p_tam_x||', '||p_tam_y||', '
+                 ||p_amostracodigo||', '||p_areacodigo||', 0, ''NAO'', '''||current_date||''', 0, ''0'', 0, 14 )';
+             
+         execute v_sql;
+         execute 'select codigo from mapa where descricao = '''||p_descricaomapa||'''' into v_codmapa;
+         raise notice 'insert: %', v_sql;
+         V_SQL := 'select f_gera_grid_mapa('||p_areacodigo||', ''area'', '||p_tam_x||', '||p_tam_y||', '''||p_nometabelapixels||''', '||v_codmapa||', '''||p_tipogeometria||''', 4326)';
+         raise notice 'insert: %', v_sql;
+         execute v_sql into v_resultgrade;
+         v_sql := 'select f_interpola_tabela(''mapa'','''||p_descricaomapa||''', ''pixelamostra'','||p_expoente||
+                                                    ','||p_npontos||','||p_tamanhoraio||',''valor'','''||p_tipointerpolador||''')';
+         
+	 execute v_sql;
+     --    SELECT UpdateGeometrySRID('pixelamostra','geometry',4326);
+  --      delete from pixelmapa;
+  --      execute 'select f_gera_grid('||p_codarea||', '''||area
+  return true;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_cria_mapa(p_descricaomapa text, p_expoente double precision, p_nometabelapixels text, p_npontos integer, p_tamanhoraio double precision, p_tipogeometria text, p_tipointerpolador text, p_tam_x double precision, p_tam_y double precision, p_amostracodigo integer, p_areacodigo integer, p_atributocodigo integer) OWNER TO api;
+
+--
+-- TOC entry 350 (class 1255 OID 20896)
+-- Name: f_gera_grid(integer, text, double precision, double precision, text, integer, text, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_gera_grid(p_codarea integer, p_nometabelaareas text, p_tam_x double precision, p_tam_y double precision, p_mapa text, p_codgrade integer, p_tipogeometria text, p_sriddefaultbanco integer) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  V_xmin  float;             -- x mínimo do polígono
+  V_xmax  float;             -- x máximo do poligono
+  V_ymin  float;             -- y mínimo do poligono
+  V_ymax  float;             -- y máximo do poligono
+  V_nPixel_x  integer;       -- número de pixels de x
+  V_nPixel_y  integer;       -- número de pixels de y  
+  V_largura   float;         -- largura total da área;
+  V_altura    float;         -- altura total da área;
+  V_tamPixel_x float;        -- tamanho do pixel x
+  V_tamPixel_y float;        -- tamanho do pixel y
+  V_x          integer := 0; -- usado para o LOOP
+  V_y          integer := 0; -- usado para o LOOP
+  Posicao_x    float;        -- necessário para quando o poligono inicia na posição (0,0)
+  Posicao_y    float;        -- necessário para quando o poligono inicia na posição (0,0)
+  V_Str_Insert text;         -- string para executar o insert
+  V_str_Delete text;         -- string para executar o delete dos pontos que estão fora do poligono
+  local_srid    integer;   -- ALTERAR QUANDO FOR PRECISO ALTERAR A REGIÃO
+  v_longcentral float;
+  v_latcentral float;
+BEGIN
+      execute 'select st_x(st_centroid(geometry)), st_y(st_centroid(geometry)) from '||p_nometabelaareas|| '
+               where codigo = '||p_codarea into v_longcentral, v_latcentral;
+      select f_buscadatum_utm(v_longcentral, v_latcentral) into local_srid;
+      raise notice 'srid:%', local_srid;
+	  
+      EXECUTE 'Select st_xmin(st_transform(geometry,'||local_srid||')), st_xmax(st_transform(geometry,'||local_srid||')),  st_ymin(st_transform(geometry,'||local_srid||')), st_ymax(st_transform(geometry,'||local_srid||')) from '||P_NomeTabelaAreas||' where codigo = '||P_Codarea INTO V_xmin, V_xmax, V_ymin, V_ymax;
+      V_largura    := V_xmax - V_xmin;            -- determina a largura máxima da área
+      V_altura     := V_ymax - V_ymin;            -- determina a altura máxima da área
+       raise notice 'XMIN: % ', V_xmin;
+       raise notice 'XMAX: % ', V_xmax;
+       raise notice 'YMIN: % ', V_ymin;
+       raise notice 'YMAX: % ', V_ymax;
+                  
+       raise notice 'largura: % - altura: %', v_largura, v_altura;
+      V_nPixel_x   := round(V_largura/P_tam_x);   -- define a quantidade de pontos na horizontal
+       raise notice 'npixelsX: %',v_npixel_x;
+      V_nPixel_y   := round(V_altura/P_tam_y);   -- define a quantidade de pontos na vertical
+       raise notice 'npixelsY: %',v_npixel_y;
+     -- V_tamPixel_x := V_largura / V_nPixel_x;     -- define o tamanho de cada ponto da horizontal
+     -- V_tamPixel_y := V_altura / V_nPixel_y;      -- define o tamanho de cada ponto da vertical
+      V_tamPixel_x := p_tam_x;     -- define o tamanho de cada ponto da horizontal
+      V_tamPixel_y := p_tam_y;      -- define o tamanho de cada ponto da vertical
+
+
+    --  EXECUTE 'CREATE TABLE '||P_Mapa||' (	gid serial primary key, 
+	--					gri_medida float)';   -- cria a tabela onde o novo gride será armazenado
+    -- EXECUTE ' SELECT AddGeometryColumn('''||P_Mapa||''', ''geometry'', '||P_SridDefaultBanco||', '''||P_Tipogeometria||''', 2)'; 
+
+      FOR V_y IN 0..V_nPixel_y LOOP
+          FOR V_x IN 0..V_nPixel_x LOOP
+              Posicao_x := V_xmin + (V_x * V_tamPixel_x)+(V_tamPixel_x/2);  -- define a posição do X para a geometria
+               raise notice 'posição x: %', round(cast (Posicao_x as numeric),6);
+              Posicao_y := (V_ymin + (V_y * V_tamPixel_y)+(V_tamPixel_y/2)); -- define a posição do Y para a geometria
+               raise notice 'posição y: %', round(cast(Posicao_y as numeric),6);
+
+			  IF P_Tipogeometria = 'POINT' THEN  
+					  V_str_Insert := 'insert into '||P_Mapa||'(geometry, grade_codigo) values '||
+									  '(st_transform(st_geomfromtext(''POINT('||round(cast (Posicao_x as numeric),4)|| ' '||round(cast(Posicao_y as numeric),4)||')'', '||local_Srid||'), '||P_SridDefaultBanco||'), '||p_codGrade||');';   
+			  ELSE
+					  V_str_Insert := 'insert into '||P_Mapa||'(geometry, grade_codigo) values '||
+									  '(st_transform(st_geomfromtext(''POLYGON(('||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||',
+									   '||Posicao_x+(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||',
+									   '||Posicao_x+(V_TamPixel_x/2)|| ' '||Posicao_y+(V_TamPixel_y/2)||',
+									   '||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y+(V_TamPixel_y/2)||',
+									   '||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||'))'', '||local_srid||'),'||P_SridDefaultBanco||'), '||p_codGrade||');';   
+			  END IF;
+					  execute V_Str_Insert;          
+		  END LOOP;
+      END LOOP;
+	  
+	  V_str_Delete := 'delete from '||P_Mapa||' b where b.codigo not in (select a.codigo from '||P_Mapa||' a, '||p_nometabelaareas||' c
+            where (st_Intersects( c.geometry, a.geometry) or st_contains( c.geometry, a.geometry) ) and c.codigo = '||P_Codarea||')';
+      execute V_str_Delete;
+	  
+      return true;
+END;
+$$;
+
+
+ALTER FUNCTION public.f_gera_grid(p_codarea integer, p_nometabelaareas text, p_tam_x double precision, p_tam_y double precision, p_mapa text, p_codgrade integer, p_tipogeometria text, p_sriddefaultbanco integer) OWNER TO api;
+
+--
+-- TOC entry 351 (class 1255 OID 20898)
+-- Name: f_gera_grid_mapa(integer, text, double precision, double precision, text, integer, text, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_gera_grid_mapa(p_codarea integer, p_nometabelaareas text, p_tam_x double precision, p_tam_y double precision, p_mapa text, p_codgrade integer, p_tipogeometria text, p_sriddefaultbanco integer) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  V_xmin  float;             -- x mínimo do polígono
+  V_xmax  float;             -- x máximo do poligono
+  V_ymin  float;             -- y mínimo do poligono
+  V_ymax  float;             -- y máximo do poligono
+  V_nPixel_x  integer;       -- número de pixels de x
+  V_nPixel_y  integer;       -- número de pixels de y  
+  V_largura   float;         -- largura total da área;
+  V_altura    float;         -- altura total da área;
+  V_tamPixel_x float;        -- tamanho do pixel x
+  V_tamPixel_y float;        -- tamanho do pixel y
+  V_x          integer := 0; -- usado para o LOOP
+  V_y          integer := 0; -- usado para o LOOP
+  Posicao_x    float;        -- necessário para quando o poligono inicia na posição (0,0)
+  Posicao_y    float;        -- necessário para quando o poligono inicia na posição (0,0)
+  V_Str_Insert text;         -- string para executar o insert
+  V_str_Delete text;         -- string para executar o delete dos pontos que estão fora do poligono
+  local_srid    integer;   -- ALTERAR QUANDO FOR PRECISO ALTERAR A REGIÃO
+  v_longcentral float;
+  v_latcentral float;
+BEGIN
+      execute 'select st_x(st_centroid(geometry)), st_y(st_centroid(geometry)) from '||p_nometabelaareas|| '
+               where codigo = '||p_codarea into v_longcentral, v_latcentral;
+      select f_buscadatum_utm(v_longcentral, v_latcentral) into local_srid;
+      raise notice 'srid:%', local_srid;
+	  
+      EXECUTE 'Select st_xmin(st_transform(geometry,'||local_srid||')), st_xmax(st_transform(geometry,'||local_srid||')),  st_ymin(st_transform(geometry,'||local_srid||')), st_ymax(st_transform(geometry,'||local_srid||')) from '||P_NomeTabelaAreas||' where codigo = '||P_Codarea INTO V_xmin, V_xmax, V_ymin, V_ymax;
+      V_largura    := V_xmax - V_xmin;            -- determina a largura máxima da área
+      V_altura     := V_ymax - V_ymin;            -- determina a altura máxima da área
+       raise notice 'XMIN: % ', V_xmin;
+       raise notice 'XMAX: % ', V_xmax;
+       raise notice 'YMIN: % ', V_ymin;
+       raise notice 'YMAX: % ', V_ymax;
+                  
+       raise notice 'largura: % - altura: %', v_largura, v_altura;
+      V_nPixel_x   := round(V_largura/P_tam_x);   -- define a quantidade de pontos na horizontal
+       raise notice 'npixelsX: %',v_npixel_x;
+      V_nPixel_y   := round(V_altura/P_tam_y);   -- define a quantidade de pontos na vertical
+       raise notice 'npixelsY: %',v_npixel_y;
+     -- V_tamPixel_x := V_largura / V_nPixel_x;     -- define o tamanho de cada ponto da horizontal
+     -- V_tamPixel_y := V_altura / V_nPixel_y;      -- define o tamanho de cada ponto da vertical
+      V_tamPixel_x := p_tam_x;     -- define o tamanho de cada ponto da horizontal
+      V_tamPixel_y := p_tam_y;      -- define o tamanho de cada ponto da vertical
+
+
+    --  EXECUTE 'CREATE TABLE '||P_Mapa||' (	gid serial primary key, 
+	--					gri_medida float)';   -- cria a tabela onde o novo gride será armazenado
+    -- EXECUTE ' SELECT AddGeometryColumn('''||P_Mapa||''', ''geometry'', '||P_SridDefaultBanco||', '''||P_Tipogeometria||''', 2)'; 
+
+      FOR V_y IN 0..V_nPixel_y LOOP
+          FOR V_x IN 0..V_nPixel_x LOOP
+              Posicao_x := V_xmin + (V_x * V_tamPixel_x)+(V_tamPixel_x/2);  -- define a posição do X para a geometria
+               raise notice 'posição x: %', round(cast (Posicao_x as numeric),6);
+              Posicao_y := (V_ymin + (V_y * V_tamPixel_y)+(V_tamPixel_y/2)); -- define a posição do Y para a geometria
+               raise notice 'posição y: %', round(cast(Posicao_y as numeric),6);
+
+			  IF P_Tipogeometria = 'POINT' THEN  
+					  V_str_Insert := 'insert into '||P_Mapa||'(geometry, mapa_codigo) values '||
+									  '(st_transform(st_geomfromtext(''POINT('||round(cast (Posicao_x as numeric),4)|| ' '||round(cast(Posicao_y as numeric),4)||')'', '||local_Srid||'), '||P_SridDefaultBanco||'), '||p_codgrade||');';   
+			  ELSE
+					  V_str_Insert := 'insert into '||P_Mapa||'(geometry, mapa_codigo) values '||
+									  '(st_transform(st_geomfromtext(''POLYGON(('||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||',
+									   '||Posicao_x+(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||',
+									   '||Posicao_x+(V_TamPixel_x/2)|| ' '||Posicao_y+(V_TamPixel_y/2)||',
+									   '||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y+(V_TamPixel_y/2)||',
+									   '||Posicao_x-(V_TamPixel_x/2)|| ' '||Posicao_y-(V_TamPixel_y/2)||'))'', '||local_srid||'),'||P_SridDefaultBanco||'), '||p_codgrade||');';   
+			  END IF;
+					  execute V_Str_Insert;          
+		  END LOOP;
+      END LOOP;
+	  
+	  V_str_Delete := 'delete from '||P_Mapa||' b where b.codigo not in (select a.codigo from '||P_Mapa||' a, '||p_nometabelaareas||' c
+            where (st_Intersects( c.geometry, a.geometry) or st_contains( c.geometry, a.geometry) ) and c.codigo = '||P_Codarea||')';
+      execute V_str_Delete;
+	  
+      return true;
+END;
+$$;
+
+
+ALTER FUNCTION public.f_gera_grid_mapa(p_codarea integer, p_nometabelaareas text, p_tam_x double precision, p_tam_y double precision, p_mapa text, p_codgrade integer, p_tipogeometria text, p_sriddefaultbanco integer) OWNER TO api;
+
+--
+-- TOC entry 352 (class 1255 OID 20900)
+-- Name: f_interpola_tabela(text, text, text, double precision, integer, double precision, text, text); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_interpola_tabela(p_tabelagrade text, p_descricaograde text, p_tabelaamostra text, expoente double precision, p_npontos integer, p_raio double precision, p_coluna text, p_tipointerpolador text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+     cursor_grade    refcursor;
+     record_cursor   record;
+     valor_interpolado float;
+     v_codgrade integer;
+     teste             boolean;
+     testando		text;
+     teste1	text;
+BEGIN
+ --    EXECUTE 'CREATE TABLE '||P_TabelaGrade||' as select * from tb_ref';
+ --    EXECUTE 'SELECT F_ADD_GEOMETRY_COLUMNS(''public'',''the_geom'', '''||P_TabelaGrade||''', ''POINT'', 3, -1)' into teste;
+
+    raise notice '------**************************-%--------------%------', p_tabelagrade, p_descricaograde;
+      execute 'select codigo from '||p_tabelagrade||' where descricao = '''||p_descricaograde||'''' into v_codgrade; 
+     OPEN Cursor_grade FOR EXECUTE 'SELECT * FROM pixelmapa where mapa_codigo = '||v_codgrade;
+         raise notice '------**************************---------------------';
+
+     LOOP FETCH Cursor_grade INTO Record_cursor;
+        EXIT WHEN NOT FOUND;
+         IF P_TipoInterpolador = 'MM' THEN
+              EXECUTE 'select F_INTERPOLADOR_PONTO_MM('||record_cursor.codigo||', '''|| P_TabelaAmostra||''', ''pixelmapa'', cast('||expoente||' as double precision), '||P_NPontos||', cast('||P_Raio||' as double precision),'''||P_Coluna||''')' into valor_interpolado;
+	 ELSE
+              EXECUTE 'select F_INTERPOLADOR_PONTO_ID('||record_cursor.codigo||', '''|| P_TabelaAmostra||''', ''pixelmapa'', cast('||expoente||' as double precision), '||P_NPontos||', cast('||P_Raio||' as double precision),'''||P_Coluna||''')' into valor_interpolado;
+	 END IF;
+	EXECUTE 'UPDATE pixelmapa set valor = '||valor_interpolado||' where codigo = '||record_cursor.codigo;
+     END LOOP;
+return true;
+END;
+$$;
+
+
+ALTER FUNCTION public.f_interpola_tabela(p_tabelagrade text, p_descricaograde text, p_tabelaamostra text, expoente double precision, p_npontos integer, p_raio double precision, p_coluna text, p_tipointerpolador text) OWNER TO api;
+
+--
+-- TOC entry 353 (class 1255 OID 20901)
+-- Name: f_interpolador_ponto_id(integer, text, text, double precision, integer, double precision, text); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_interpolador_ponto_id(p_interpolacao integer, p_refinterpolacao text, p_grade text, p_expoente double precision, p_elementos integer, p_raio double precision, p_coluna text) RETURNS double precision
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+    Cur_Amostras   	 refcursor;
+    V_Pontos   		 GEOMETRY;
+    V_Distancia 	 FLOAT;
+    V_Medida    	 FLOAT;
+    V_Soma      	 FLOAT:=0;
+    V_Numerador		 FLOAT:=0;
+    V_Denominador	 FLOAT:=0;
+    V_Estimado		 FLOAT:=0;
+    i 			 integer:=0;
+    V_QUERY_SELECT 	 text;
+BEGIN
+  -- os parâmetros de entrada da função são ($1 -> código do ponto a ser interpolado, 
+						--$2 -> nome da amostra, 
+						--$3 -> nome da tabela que armazena os pixels (pixelmapa), 
+						--$4 -> expoente da interpolacao, 
+						--$5 -> numero de elementos, 
+						--$6 -> raio (em metros), 
+						--$7 -> nome da coluna de interpolação
+
+						
+	   V_QUERY_SELECT := 'SELECT  a.geometry, st_distance(st_centroid(b.geometry), a.geometry) as distancia,  a.'||P_Coluna||' as medida
+           FROM '||P_RefInterpolacao||' a, '||P_Grade||'  b
+           WHERE b.codigo = '||P_interpolacao;
+           IF P_Elementos > 0 THEN
+		V_QUERY_SELECT := V_QUERY_SELECT ||' order by distancia LIMIT '||P_Elementos ;
+	   ELSE
+	        V_QUERY_SELECT := V_QUERY_SELECT ||' and st_contains(st_buffer(st_centroid(b.geometry), '||P_Raio||'), a.geometry)';
+           END IF;
+           raise notice 'sql: %',v_query_select;
+	OPEN Cur_Amostras FOR EXECUTE   V_QUERY_SELECT;
+	LOOP FETCH Cur_Amostras INTO V_Pontos, V_Distancia, V_Medida;
+	  EXIT WHEN NOT FOUND;
+           i:= i+1;
+           V_Numerador := V_Numerador + (V_Medida/(V_Distancia^P_Expoente));
+           V_Denominador := V_Denominador + (1/(V_Distancia^P_Expoente));
+        END LOOP;
+        IF i > 0 THEN
+            V_Soma := V_Numerador/V_Denominador;
+        ELSE
+           RETURN 0;
+        END IF;
+      CLOSE Cur_Amostras;
+      RETURN V_Soma;
+END;
+$_$;
+
+
+ALTER FUNCTION public.f_interpolador_ponto_id(p_interpolacao integer, p_refinterpolacao text, p_grade text, p_expoente double precision, p_elementos integer, p_raio double precision, p_coluna text) OWNER TO api;
+
+--
+-- TOC entry 354 (class 1255 OID 20902)
+-- Name: f_verificapermissaodelete(text, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_verificapermissaodelete(p_objeto text, p_autorizado integer, p_autorizante integer, p_codigolinha integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+   v_tipoobjeto varchar(60);
+   v_permissao  integer default null;
+   v_id_validos integer[] ;
+   v_retorno boolean default false;
+   V_nomecolunaID varchar(60);
+   V_colunaautorizante varchar(60);
+   v_sql text;
+   v_posicao integer default 0;
+begin
+     select obj_visibilidade
+         from tb_objeto where Obj_nomeobjetobanco = p_objeto into v_tipoobjeto;
+     if v_tipoobjeto = 'IRRESTRITA' then
+        return 0;    
+     else
+        select per_codigo from v_permissaodelete where per_autorizadocodigo = p_autorizado
+                                                 and   per_autorizantecodigo = p_autorizante
+                                                 and   obj_nomeobjetobanco = p_objeto into v_permissao;
+        if v_permissao is null then
+           return -1;
+        else
+          select Obj_chaveprimaria, Obj_colunaidusuario from tb_objeto where upper(obj_nomeobjetobanco) = upper(p_objeto) into v_nomecolunaID, V_colunaautorizante; 
+          v_sql := 'select array_agg('||v_nomecolunaID||') from '|| p_objeto||'  where '||V_colunaautorizante||' = '||p_autorizante;
+          execute v_sql into v_id_validos; 
+          if v_id_validos is null then
+             v_id_validos := '{0}';
+          end if;
+	  for i in 1..array_upper(v_id_validos, 1) loop
+                if v_id_validos[i] = p_codigolinha then
+                   v_posicao := i;
+                   exit;
+                end if;
+	  end loop;
+          if v_posicao <> 0 then     
+              return v_permissao;
+            else 
+              return -1;
+            end if;
+        end if;
+     end if;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_verificapermissaodelete(p_objeto text, p_autorizado integer, p_autorizante integer, p_codigolinha integer) OWNER TO api;
+
+--
+-- TOC entry 355 (class 1255 OID 20903)
+-- Name: f_verificapermissaoinsert(text, integer, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_verificapermissaoinsert(p_objeto text, p_autorizado integer, p_autorizante integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_tipoobjeto varchar(60);
+  v_permissao  integer default null;
+begin
+    select obj_visibilidade
+        from tb_objeto where Obj_nomeobjetobanco = p_objeto into v_tipoobjeto;
+    if v_tipoobjeto = 'IRRESTRITA' then
+       return 0;    
+    else
+       select per_codigo from v_permissaoinsert where per_codautorizado = p_autorizado
+                                                and   per_codautorizante = p_autorizante
+                                                and   obj_nomeobjetobanco = p_objeto into v_permissao;
+       if v_permissao is null then
+          return -1;
+       else
+          return v_permissao;
+       end if;
+    end if;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_verificapermissaoinsert(p_objeto text, p_autorizado integer, p_autorizante integer) OWNER TO api;
+
+--
+-- TOC entry 356 (class 1255 OID 20904)
+-- Name: f_verificapermissaoselect(text, integer, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_verificapermissaoselect(p_objeto text, p_autorizado integer, p_autorizante integer) RETURNS text
+    LANGUAGE plpgsql
+    AS $$
+declare
+   v_tipoobjeto varchar(60);
+   v_permissao  integer default null;
+   v_id_validos integer[] ;
+   v_retorno boolean default false;
+   V_textosaida text;
+   v_sql text;
+   v_posicao integer default 0;
+   v_chaveprimaria text;
+   v_colunaidusuario text;
+begin
+     select obj_visibilidade
+         from tb_objeto where Obj_nomeobjetobanco = p_objeto into v_tipoobjeto;
+     if v_tipoobjeto = 'IRRESTRITA' then
+        return '';    
+      else
+        select obj_chaveprimaria, obj_colunaidusuario from tb_objeto 
+                        where obj_nomeobjetobanco   = p_objeto into v_chaveprimaria, v_colunaidusuario;
+        select per_codigo from v_permissaoselect where per_autorizadocodigo  = p_autorizado
+                                                 and   per_autorizantecodigo = p_autorizante
+                                                 and   obj_nomeobjetobanco   = p_objeto into v_permissao;
+        if v_permissao is null then
+           v_textosaida:=(' '||v_chaveprimaria||' = -1'); -- não tem permissao
+           return v_textosaida;
+        else
+ --         select Obj_chaveprimaria, Obj_colunaidautorizante from tb_objeto where upper(obj_nomeobjetobanco) = upper(p_objeto) into v_nomecolunaID, V_colunaautorizante; 
+          v_sql := 'select array_agg('||v_chaveprimaria||') from '|| p_objeto||'  where '||v_colunaidusuario||' = '||p_autorizante;
+          execute v_sql into v_id_validos; 
+          if v_id_validos is null then
+             v_textosaida :=(' '||v_chaveprimaria||' = 0'); -- tem permissao mas não tem dados
+             return v_textosaida;
+          else 
+             v_textosaida := '(';
+           for i in 1..array_upper(v_id_validos, 1) loop
+                v_textosaida := v_textosaida||' '||v_id_validos[i]||', '; 
+           end loop;
+                v_textosaida := v_textosaida||')';
+                select replace (v_textosaida, ', )', ')') into v_textosaida;
+           end if;
+      end if;
+     end if;
+      return v_textosaida;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_verificapermissaoselect(p_objeto text, p_autorizado integer, p_autorizante integer) OWNER TO api;
+
+--
+-- TOC entry 357 (class 1255 OID 20905)
+-- Name: f_verificapermissaoupdate(text, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.f_verificapermissaoupdate(p_objeto text, p_autorizado integer, p_autorizante integer, p_codigolinha integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+   v_tipoobjeto varchar(60);
+   v_permissao  integer default null;
+   v_id_validos integer[] ;
+   v_retorno boolean default false;
+   V_nomecolunaID varchar(60);
+   V_colunaautorizante varchar(60);
+   v_sql text;
+   v_posicao integer default 0;
+begin
+     select obj_visibilidade
+         from tb_objeto where Obj_nomeobjetobanco = p_objeto into v_tipoobjeto;
+     if v_tipoobjeto = 'IRRESTRITA' then
+        return 0;    
+     else
+        select per_codigo from v_permissaoupdate where per_autorizadocodigo  = p_autorizado
+                                                 and   per_autorizantecodigo = p_autorizante
+                                                 and   obj_nomeobjetobanco   = p_objeto into v_permissao;
+        if v_permissao is null then
+           return -1;
+        else
+          select Obj_chaveprimaria, Obj_colunaidusuario from tb_objeto where upper(obj_nomeobjetobanco) = upper(p_objeto) into v_nomecolunaID, V_colunaautorizante; 
+          v_sql := 'select array_agg('||v_nomecolunaID||') from '|| p_objeto||'  where '||V_colunaautorizante||' = '||p_autorizante;
+          execute v_sql into v_id_validos; 
+          if v_id_validos is null then
+             v_id_validos := '{0}';
+          end if;
+      for i in 1..array_upper(v_id_validos, 1) loop
+                if v_id_validos[i] = p_codigolinha then
+                   v_posicao := i;
+                   exit;
+                end if;
+      end loop;
+          if v_posicao <> 0 then     
+              return v_permissao;
+            else 
+              return -1;
+            end if;
+        end if;
+     end if;
+end;
+$$;
+
+
+ALTER FUNCTION public.f_verificapermissaoupdate(p_objeto text, p_autorizado integer, p_autorizante integer, p_codigolinha integer) OWNER TO api;
+
+--
+-- TOC entry 1563 (class 1255 OID 132466)
+-- Name: foo(); Type: FUNCTION; Schema: public; Owner: api
+--
+
+CREATE FUNCTION public.foo() RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+	BEGIN
+		FOR i IN 1..10 LOOP
+			SELECT * FROM tb_usuario WHERE usu_codigo = i;
+		END LOOP;
+	END;
+$$;
+
+
+ALTER FUNCTION public.foo() OWNER TO api;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- TOC entry 306 (class 1259 OID 58522)
+-- Name: tb_abrangencianoticia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_abrangencianoticia (
+    abr_codigo bigint NOT NULL,
+    abr_descricao character varying(2) NOT NULL,
+    abr_notcodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_abrangencianoticia OWNER TO api;
+
+--
+-- TOC entry 305 (class 1259 OID 58520)
+-- Name: tb_abrangencianoticia_abr_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_abrangencianoticia_abr_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_abrangencianoticia_abr_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4276 (class 0 OID 0)
+-- Dependencies: 305
+-- Name: tb_abrangencianoticia_abr_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_abrangencianoticia_abr_codigo_seq OWNED BY public.tb_abrangencianoticia.abr_codigo;
+
+
+--
+-- TOC entry 176 (class 1259 OID 20906)
+-- Name: tb_agendaoperacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_agendaoperacao (
+    age_codigo bigint NOT NULL,
+    age_datacadastro timestamp without time zone NOT NULL,
+    age_dataprevisaooperacao date,
+    age_descricao character varying(100) NOT NULL,
+    age_obs character varying(200),
+    age_arecodigo integer NOT NULL,
+    age_safcodigo integer NOT NULL,
+    age_tipcodigo integer NOT NULL,
+    age_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_agendaoperacao OWNER TO api;
+
+--
+-- TOC entry 177 (class 1259 OID 20909)
+-- Name: tb_agendaoperacao_age_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_agendaoperacao_age_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_agendaoperacao_age_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4277 (class 0 OID 0)
+-- Dependencies: 177
+-- Name: tb_agendaoperacao_age_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_agendaoperacao_age_codigo_seq OWNED BY public.tb_agendaoperacao.age_codigo;
+
+
+--
+-- TOC entry 178 (class 1259 OID 20911)
+-- Name: tb_amostra; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_amostra (
+    amo_codigo bigint NOT NULL,
+    amo_datacadastro date NOT NULL,
+    amo_descricao character varying(100) NOT NULL,
+    amo_tabela character varying(30) NOT NULL,
+    amo_arecodigo integer NOT NULL,
+    amo_atrcodigo integer NOT NULL,
+    amo_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_amostra OWNER TO api;
+
+--
+-- TOC entry 179 (class 1259 OID 20914)
+-- Name: tb_amostra_amo_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_amostra_amo_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_amostra_amo_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4278 (class 0 OID 0)
+-- Dependencies: 179
+-- Name: tb_amostra_amo_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_amostra_amo_codigo_seq OWNED BY public.tb_amostra.amo_codigo;
+
+
+--
+-- TOC entry 180 (class 1259 OID 20916)
+-- Name: tb_area_are_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_area_are_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_area_are_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 292 (class 1259 OID 23488)
+-- Name: tb_area; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_area (
+    are_codigo bigint DEFAULT nextval('public.tb_area_are_codigo_seq'::regclass) NOT NULL,
+    are_datacadastro date,
+    are_descricao character varying(100),
+    are_tamanho numeric NOT NULL,
+    the_geom public.geometry(MultiPolygon,4326) NOT NULL,
+    are_tiposolocodigo integer NOT NULL,
+    are_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_area OWNER TO api;
+
+--
+-- TOC entry 181 (class 1259 OID 20918)
+-- Name: tb_atributo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_atributo (
+    atr_codigo bigint NOT NULL,
+    atr_en_descricao character varying(60),
+    atr_es_descricao character varying(60) NOT NULL,
+    atr_pt_descricao character varying(60) NOT NULL,
+    atr_en_sigla character varying(5),
+    atr_es_sigla character varying(5) NOT NULL,
+    atr_pt_sigla character varying(5) NOT NULL,
+    atr_en_unicodigo integer,
+    atr_es_unicodigo integer,
+    atr_pt_unicodigo integer NOT NULL,
+    atr_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_atributo OWNER TO api;
+
+--
+-- TOC entry 182 (class 1259 OID 20921)
+-- Name: tb_atributo_atr_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_atributo_atr_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_atributo_atr_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4279 (class 0 OID 0)
+-- Dependencies: 182
+-- Name: tb_atributo_atr_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_atributo_atr_codigo_seq OWNED BY public.tb_atributo.atr_codigo;
+
+
+--
+-- TOC entry 308 (class 1259 OID 58530)
+-- Name: tb_categorianoticia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_categorianoticia (
+    cat_codigo bigint NOT NULL,
+    cat_descricao character varying(100) NOT NULL,
+    cat_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_categorianoticia OWNER TO api;
+
+--
+-- TOC entry 307 (class 1259 OID 58528)
+-- Name: tb_categorianoticia_cat_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_categorianoticia_cat_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_categorianoticia_cat_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4280 (class 0 OID 0)
+-- Dependencies: 307
+-- Name: tb_categorianoticia_cat_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_categorianoticia_cat_codigo_seq OWNED BY public.tb_categorianoticia.cat_codigo;
+
+
+--
+-- TOC entry 310 (class 1259 OID 58538)
+-- Name: tb_categorianoticiausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_categorianoticiausuario (
+    cat_codigo bigint NOT NULL,
+    cat_catcodigo integer NOT NULL,
+    cat_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_categorianoticiausuario OWNER TO api;
+
+--
+-- TOC entry 309 (class 1259 OID 58536)
+-- Name: tb_categorianoticiausuario_cat_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_categorianoticiausuario_cat_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_categorianoticiausuario_cat_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4281 (class 0 OID 0)
+-- Dependencies: 309
+-- Name: tb_categorianoticiausuario_cat_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_categorianoticiausuario_cat_codigo_seq OWNED BY public.tb_categorianoticiausuario.cat_codigo;
+
+
+--
+-- TOC entry 183 (class 1259 OID 20923)
+-- Name: tb_classe; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_classe (
+    cla_codigo bigint NOT NULL,
+    cla_cor character varying(30),
+    cla_nivel character varying(60) NOT NULL,
+    cla_valormax double precision,
+    cla_valormin double precision,
+    cla_clacodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_classe OWNER TO api;
+
+--
+-- TOC entry 184 (class 1259 OID 20926)
+-- Name: tb_classe_cla_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_classe_cla_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_classe_cla_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4282 (class 0 OID 0)
+-- Dependencies: 184
+-- Name: tb_classe_cla_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_classe_cla_codigo_seq OWNED BY public.tb_classe.cla_codigo;
+
+
+--
+-- TOC entry 185 (class 1259 OID 20928)
+-- Name: tb_classificacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_classificacao (
+    cla_codigo bigint NOT NULL,
+    cla_atrcodigo integer NOT NULL,
+    cla_entcodigo integer NOT NULL,
+    cla_tipcodigo integer NOT NULL,
+    cla_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_classificacao OWNER TO api;
+
+--
+-- TOC entry 186 (class 1259 OID 20931)
+-- Name: tb_classificacao_cla_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_classificacao_cla_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_classificacao_cla_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4283 (class 0 OID 0)
+-- Dependencies: 186
+-- Name: tb_classificacao_cla_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_classificacao_cla_codigo_seq OWNED BY public.tb_classificacao.cla_codigo;
+
+
+--
+-- TOC entry 187 (class 1259 OID 20933)
+-- Name: tb_cultura; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_cultura (
+    cul_codigo bigint NOT NULL,
+    cul_datacadastro date,
+    cul_en_descricao character varying(60),
+    cul_es_descricao character varying(60),
+    cul_pt_descricao character varying(60) NOT NULL,
+    cul_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_cultura OWNER TO api;
+
+--
+-- TOC entry 188 (class 1259 OID 20936)
+-- Name: tb_cultura_cul_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_cultura_cul_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_cultura_cul_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4284 (class 0 OID 0)
+-- Dependencies: 188
+-- Name: tb_cultura_cul_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_cultura_cul_codigo_seq OWNED BY public.tb_cultura.cul_codigo;
+
+
+--
+-- TOC entry 189 (class 1259 OID 20938)
+-- Name: tb_culturausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_culturausuario (
+    cul_codigo bigint NOT NULL,
+    cul_culcodigo integer NOT NULL,
+    cul_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_culturausuario OWNER TO api;
+
+--
+-- TOC entry 190 (class 1259 OID 20941)
+-- Name: tb_culturausuario_cul_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_culturausuario_cul_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_culturausuario_cul_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4285 (class 0 OID 0)
+-- Dependencies: 190
+-- Name: tb_culturausuario_cul_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_culturausuario_cul_codigo_seq OWNED BY public.tb_culturausuario.cul_codigo;
+
+
+--
+-- TOC entry 191 (class 1259 OID 20943)
+-- Name: tb_empresa; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_empresa (
+    emp_codigo bigint NOT NULL,
+    emp_cidade character varying(100),
+    emp_estado character varying(3),
+    emp_nome character varying(100) NOT NULL,
+    emp_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_empresa OWNER TO api;
+
+--
+-- TOC entry 192 (class 1259 OID 20946)
+-- Name: tb_empresa_emp_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_empresa_emp_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_empresa_emp_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4286 (class 0 OID 0)
+-- Dependencies: 192
+-- Name: tb_empresa_emp_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_empresa_emp_codigo_seq OWNED BY public.tb_empresa.emp_codigo;
+
+
+--
+-- TOC entry 193 (class 1259 OID 20948)
+-- Name: tb_empresausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_empresausuario (
+    emp_codigo bigint NOT NULL,
+    emp_empcodigo integer NOT NULL,
+    emp_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_empresausuario OWNER TO api;
+
+--
+-- TOC entry 194 (class 1259 OID 20951)
+-- Name: tb_empresausuario_emp_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_empresausuario_emp_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_empresausuario_emp_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4287 (class 0 OID 0)
+-- Dependencies: 194
+-- Name: tb_empresausuario_emp_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_empresausuario_emp_codigo_seq OWNED BY public.tb_empresausuario.emp_codigo;
+
+
+--
+-- TOC entry 195 (class 1259 OID 20953)
+-- Name: tb_entidadeclassificadora; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_entidadeclassificadora (
+    ent_codigo bigint NOT NULL,
+    ent_cidade character varying(100) NOT NULL,
+    ent_descricao character varying(100) NOT NULL,
+    ent_estado character varying(3),
+    ent_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_entidadeclassificadora OWNER TO api;
+
+--
+-- TOC entry 196 (class 1259 OID 20956)
+-- Name: tb_entidadeclassificadora_ent_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_entidadeclassificadora_ent_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_entidadeclassificadora_ent_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4288 (class 0 OID 0)
+-- Dependencies: 196
+-- Name: tb_entidadeclassificadora_ent_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_entidadeclassificadora_ent_codigo_seq OWNED BY public.tb_entidadeclassificadora.ent_codigo;
+
+
+--
+-- TOC entry 197 (class 1259 OID 20958)
+-- Name: tb_entrega; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_entrega (
+    ent_codigo bigint NOT NULL,
+    ent_data timestamp without time zone NOT NULL,
+    ent_motorista character varying(100),
+    ent_obs character varying(100),
+    ent_quantidade numeric(10,2),
+    ent_quantidadetotaldesconto numeric(10,2),
+    ent_quantidadetotalliquido numeric(10,2),
+    ent_umidade numeric(10,2),
+    ent_empcodigo integer NOT NULL,
+    ent_opecodigo integer NOT NULL,
+    ent_unicodigo_quantidade integer NOT NULL,
+    ent_veicodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_entrega OWNER TO api;
+
+--
+-- TOC entry 198 (class 1259 OID 20961)
+-- Name: tb_entrega_ent_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_entrega_ent_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_entrega_ent_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4289 (class 0 OID 0)
+-- Dependencies: 198
+-- Name: tb_entrega_ent_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_entrega_ent_codigo_seq OWNED BY public.tb_entrega.ent_codigo;
+
+
+--
+-- TOC entry 199 (class 1259 OID 20963)
+-- Name: tb_funcionario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_funcionario (
+    fun_codigo bigint NOT NULL,
+    fun_nome character varying(100) NOT NULL,
+    fun_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_funcionario OWNER TO api;
+
+--
+-- TOC entry 200 (class 1259 OID 20966)
+-- Name: tb_funcionario_fun_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_funcionario_fun_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_funcionario_fun_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4290 (class 0 OID 0)
+-- Dependencies: 200
+-- Name: tb_funcionario_fun_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_funcionario_fun_codigo_seq OWNED BY public.tb_funcionario.fun_codigo;
+
+
+--
+-- TOC entry 201 (class 1259 OID 20968)
+-- Name: tb_funcionariooperacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_funcionariooperacao (
+    fun_codigo bigint NOT NULL,
+    fun_funcao character varying(100),
+    fun_horastrabalhadas numeric(10,3) NOT NULL,
+    fun_valortotal numeric(10,2) NOT NULL,
+    fun_funcodigo integer NOT NULL,
+    fun_opecodigo integer NOT NULL,
+    fun_unicodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_funcionariooperacao OWNER TO api;
+
+--
+-- TOC entry 202 (class 1259 OID 20971)
+-- Name: tb_funcionariooperacao_fun_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_funcionariooperacao_fun_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_funcionariooperacao_fun_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4291 (class 0 OID 0)
+-- Dependencies: 202
+-- Name: tb_funcionariooperacao_fun_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_funcionariooperacao_fun_codigo_seq OWNED BY public.tb_funcionariooperacao.fun_codigo;
+
+
+--
+-- TOC entry 300 (class 1259 OID 50557)
+-- Name: tb_geometriaocorrencia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_geometriaocorrencia (
+    geo_codigo bigint NOT NULL,
+    geo_obs character varying(100) NOT NULL,
+    the_geom public.geometry(GeometryCollection,4326) NOT NULL,
+    geo_valor numeric NOT NULL,
+    geo_ococodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_geometriaocorrencia OWNER TO api;
+
+--
+-- TOC entry 299 (class 1259 OID 50555)
+-- Name: tb_geometriaocorrencia_geo_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_geometriaocorrencia_geo_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_geometriaocorrencia_geo_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4292 (class 0 OID 0)
+-- Dependencies: 299
+-- Name: tb_geometriaocorrencia_geo_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_geometriaocorrencia_geo_codigo_seq OWNED BY public.tb_geometriaocorrencia.geo_codigo;
+
+
+--
+-- TOC entry 203 (class 1259 OID 20973)
+-- Name: tb_gradeamostral; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_gradeamostral (
+    gra_codigo bigint NOT NULL,
+    gra_datacadastro date,
+    gra_descricao character varying(60) NOT NULL,
+    gra_nometabela character varying(30),
+    gra_tamx double precision NOT NULL,
+    gra_tamy double precision NOT NULL,
+    gra_arecodigo integer NOT NULL,
+    gra_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_gradeamostral OWNER TO api;
+
+--
+-- TOC entry 204 (class 1259 OID 20976)
+-- Name: tb_gradeamostral_gra_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_gradeamostral_gra_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_gradeamostral_gra_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4293 (class 0 OID 0)
+-- Dependencies: 204
+-- Name: tb_gradeamostral_gra_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_gradeamostral_gra_codigo_seq OWNED BY public.tb_gradeamostral.gra_codigo;
+
+
+--
+-- TOC entry 205 (class 1259 OID 20978)
+-- Name: tb_insumo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_insumo (
+    ins_codigo bigint NOT NULL,
+    ins_descricao character varying(100) NOT NULL,
+    ins_marcodigo integer NOT NULL,
+    ins_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_insumo OWNER TO api;
+
+--
+-- TOC entry 206 (class 1259 OID 20981)
+-- Name: tb_insumo_ins_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_insumo_ins_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_insumo_ins_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4294 (class 0 OID 0)
+-- Dependencies: 206
+-- Name: tb_insumo_ins_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_insumo_ins_codigo_seq OWNED BY public.tb_insumo.ins_codigo;
+
+
+--
+-- TOC entry 207 (class 1259 OID 20983)
+-- Name: tb_insumooperacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_insumooperacao (
+    ins_codigo bigint NOT NULL,
+    ins_custototal numeric(15,2) NOT NULL,
+    ins_quantidade numeric(15,2) NOT NULL,
+    ins_inscodigo integer NOT NULL,
+    ins_opecodigo integer NOT NULL,
+    ins_unicodigo_custototal integer NOT NULL,
+    ins_unicodigo_quantidade integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_insumooperacao OWNER TO api;
+
+--
+-- TOC entry 208 (class 1259 OID 20986)
+-- Name: tb_insumooperacao_ins_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_insumooperacao_ins_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_insumooperacao_ins_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4295 (class 0 OID 0)
+-- Dependencies: 208
+-- Name: tb_insumooperacao_ins_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_insumooperacao_ins_codigo_seq OWNED BY public.tb_insumooperacao.ins_codigo;
+
+
+--
+-- TOC entry 209 (class 1259 OID 20988)
+-- Name: tb_insumousuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_insumousuario (
+    ins_codigo bigint NOT NULL,
+    ins_inscodigo integer NOT NULL,
+    ins_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_insumousuario OWNER TO api;
+
+--
+-- TOC entry 210 (class 1259 OID 20991)
+-- Name: tb_insumousuario_ins_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_insumousuario_ins_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_insumousuario_ins_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4296 (class 0 OID 0)
+-- Dependencies: 210
+-- Name: tb_insumousuario_ins_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_insumousuario_ins_codigo_seq OWNED BY public.tb_insumousuario.ins_codigo;
+
+
+--
+-- TOC entry 211 (class 1259 OID 20993)
+-- Name: tb_location_id_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_location_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_location_id_seq OWNER TO api;
+
+--
+-- TOC entry 293 (class 1259 OID 23494)
+-- Name: tb_location; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_location (
+    id integer DEFAULT nextval('public.tb_location_id_seq'::regclass) NOT NULL,
+    description character varying(255),
+    location public.geometry(Point,4326)
+);
+
+
+ALTER TABLE public.tb_location OWNER TO api;
+
+--
+-- TOC entry 212 (class 1259 OID 20995)
+-- Name: tb_logarea_log_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_logarea_log_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_logarea_log_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 294 (class 1259 OID 23500)
+-- Name: tb_logarea; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_logarea (
+    log_codigo bigint DEFAULT nextval('public.tb_logarea_log_codigo_seq'::regclass) NOT NULL,
+    log_arecodigo integer NOT NULL,
+    log_tiposolocodigo integer NOT NULL,
+    log_usucodigo integer NOT NULL,
+    are_dataalteracao date NOT NULL,
+    log_datacadastro date,
+    log_descricao character varying(100),
+    log_tamanho numeric NOT NULL,
+    the_geom public.geometry(MultiPolygon,4326) NOT NULL,
+    log_tipomodificacao character varying(60),
+    log_usucodigoalteracao integer NOT NULL,
+    thegeom public.geometry(MultiPolygon,4326) NOT NULL
+);
+
+
+ALTER TABLE public.tb_logarea OWNER TO api;
+
+--
+-- TOC entry 213 (class 1259 OID 20997)
+-- Name: tb_logsafra; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_logsafra (
+    log_codigo bigint NOT NULL,
+    log_culcodigo integer,
+    log_usucodigo integer,
+    log_dataalteracao date,
+    log_datacadastro date,
+    log_descricao character varying(60) NOT NULL,
+    log_datafim date,
+    log_datainicio date,
+    log_tipomodificacao character varying(60) NOT NULL,
+    log_usucodigoalteracao integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_logsafra OWNER TO api;
+
+--
+-- TOC entry 214 (class 1259 OID 21000)
+-- Name: tb_logsafra_log_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_logsafra_log_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_logsafra_log_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4297 (class 0 OID 0)
+-- Dependencies: 214
+-- Name: tb_logsafra_log_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_logsafra_log_codigo_seq OWNED BY public.tb_logsafra.log_codigo;
+
+
+--
+-- TOC entry 215 (class 1259 OID 21002)
+-- Name: tb_mapa; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_mapa (
+    map_codigo bigint NOT NULL,
+    map_alcance double precision,
+    map_compprincipal character(1),
+    map_data date,
+    map_datacriacao date NOT NULL,
+    map_descricao character varying(100) NOT NULL,
+    map_efeitopepita double precision,
+    map_expoente double precision,
+    map_modelo character varying(100),
+    map_npontos integer,
+    map_patamar double precision,
+    map_raio double precision,
+    map_tamx double precision NOT NULL,
+    map_tamy double precision NOT NULL,
+    map_tipogeometria character varying(30) NOT NULL,
+    map_tipointerpolador character varying(30) NOT NULL,
+    map_amocodigo integer NOT NULL,
+    map_arecodigo integer NOT NULL,
+    map_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_mapa OWNER TO api;
+
+--
+-- TOC entry 216 (class 1259 OID 21005)
+-- Name: tb_mapa_map_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_mapa_map_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_mapa_map_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4298 (class 0 OID 0)
+-- Dependencies: 216
+-- Name: tb_mapa_map_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_mapa_map_codigo_seq OWNED BY public.tb_mapa.map_codigo;
+
+
+--
+-- TOC entry 217 (class 1259 OID 21007)
+-- Name: tb_mapazm; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_mapazm (
+    map_codigo bigint NOT NULL,
+    map_mapcodigo integer NOT NULL,
+    map_zoncodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_mapazm OWNER TO api;
+
+--
+-- TOC entry 218 (class 1259 OID 21010)
+-- Name: tb_mapazm_map_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_mapazm_map_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_mapazm_map_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4299 (class 0 OID 0)
+-- Dependencies: 218
+-- Name: tb_mapazm_map_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_mapazm_map_codigo_seq OWNED BY public.tb_mapazm.map_codigo;
+
+
+--
+-- TOC entry 219 (class 1259 OID 21012)
+-- Name: tb_maquina; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_maquina (
+    maq_codigo bigint NOT NULL,
+    maq_ano integer,
+    maq_descricao character varying(100) NOT NULL,
+    maq_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_maquina OWNER TO api;
+
+--
+-- TOC entry 220 (class 1259 OID 21015)
+-- Name: tb_maquina_maq_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_maquina_maq_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_maquina_maq_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4300 (class 0 OID 0)
+-- Dependencies: 220
+-- Name: tb_maquina_maq_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_maquina_maq_codigo_seq OWNED BY public.tb_maquina.maq_codigo;
+
+
+--
+-- TOC entry 221 (class 1259 OID 21017)
+-- Name: tb_maquinaoperacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_maquinaoperacao (
+    maq_codigo bigint NOT NULL,
+    maq_custoaluguel numeric(10,2),
+    maq_custooperacional numeric(10,2),
+    maq_horastrabalhadas numeric(10,2),
+    maq_maqcodigo integer NOT NULL,
+    maq_opecodigo integer NOT NULL,
+    maq_unicodigo_custoaluguel integer NOT NULL,
+    maq_unicodigo_custooperacional integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_maquinaoperacao OWNER TO api;
+
+--
+-- TOC entry 222 (class 1259 OID 21020)
+-- Name: tb_maquinaoperacao_maq_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_maquinaoperacao_maq_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_maquinaoperacao_maq_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4301 (class 0 OID 0)
+-- Dependencies: 222
+-- Name: tb_maquinaoperacao_maq_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_maquinaoperacao_maq_codigo_seq OWNED BY public.tb_maquinaoperacao.maq_codigo;
+
+
+--
+-- TOC entry 223 (class 1259 OID 21022)
+-- Name: tb_marca; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_marca (
+    mar_codigo bigint NOT NULL,
+    mar_datacadastro timestamp without time zone NOT NULL,
+    mar_descricao character varying(100) NOT NULL,
+    mar_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_marca OWNER TO api;
+
+--
+-- TOC entry 224 (class 1259 OID 21025)
+-- Name: tb_marca_mar_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_marca_mar_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_marca_mar_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4302 (class 0 OID 0)
+-- Dependencies: 224
+-- Name: tb_marca_mar_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_marca_mar_codigo_seq OWNED BY public.tb_marca.mar_codigo;
+
+
+--
+-- TOC entry 225 (class 1259 OID 21027)
+-- Name: tb_marcausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_marcausuario (
+    mar_codigo bigint NOT NULL,
+    mar_marcodigo integer NOT NULL,
+    mar_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_marcausuario OWNER TO api;
+
+--
+-- TOC entry 226 (class 1259 OID 21030)
+-- Name: tb_marcausuario_mar_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_marcausuario_mar_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_marcausuario_mar_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4303 (class 0 OID 0)
+-- Dependencies: 226
+-- Name: tb_marcausuario_mar_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_marcausuario_mar_codigo_seq OWNED BY public.tb_marcausuario.mar_codigo;
+
+
+--
+-- TOC entry 312 (class 1259 OID 58546)
+-- Name: tb_noticia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_noticia (
+    not_codigo bigint NOT NULL,
+    not_cabecalho character varying(100) NOT NULL,
+    not_datacadastro timestamp without time zone,
+    not_descricao character varying(100) NOT NULL,
+    not_datafimpublicacao timestamp without time zone,
+    not_datainiciopublicacao timestamp without time zone,
+    not_linknoticia character varying(100),
+    not_catcodigo integer NOT NULL,
+    not_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_noticia OWNER TO api;
+
+--
+-- TOC entry 311 (class 1259 OID 58544)
+-- Name: tb_noticia_not_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_noticia_not_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_noticia_not_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4304 (class 0 OID 0)
+-- Dependencies: 311
+-- Name: tb_noticia_not_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_noticia_not_codigo_seq OWNED BY public.tb_noticia.not_codigo;
+
+
+--
+-- TOC entry 314 (class 1259 OID 58554)
+-- Name: tb_noticiausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_noticiausuario (
+    not_codigo bigint NOT NULL,
+    not_dataacessomobile timestamp without time zone,
+    not_dataacessoweb timestamp without time zone,
+    not_datarecebimentomobile timestamp without time zone,
+    not_datarecebimentoweb timestamp without time zone,
+    not_notcodigo integer NOT NULL,
+    not_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_noticiausuario OWNER TO api;
+
+--
+-- TOC entry 313 (class 1259 OID 58552)
+-- Name: tb_noticiausuario_not_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_noticiausuario_not_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_noticiausuario_not_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4305 (class 0 OID 0)
+-- Dependencies: 313
+-- Name: tb_noticiausuario_not_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_noticiausuario_not_codigo_seq OWNED BY public.tb_noticiausuario.not_codigo;
+
+
+--
+-- TOC entry 302 (class 1259 OID 50568)
+-- Name: tb_ocorrencia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_ocorrencia (
+    oco_codigo bigint NOT NULL,
+    oco_datacadastro date NOT NULL,
+    oco_descricao character varying(100) NOT NULL,
+    oco_permanente character varying(30) NOT NULL,
+    oco_arecodigo integer NOT NULL,
+    oco_tipcodigo integer NOT NULL,
+    oco_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_ocorrencia OWNER TO api;
+
+--
+-- TOC entry 301 (class 1259 OID 50566)
+-- Name: tb_ocorrencia_oco_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_ocorrencia_oco_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_ocorrencia_oco_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4306 (class 0 OID 0)
+-- Dependencies: 301
+-- Name: tb_ocorrencia_oco_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_ocorrencia_oco_codigo_seq OWNED BY public.tb_ocorrencia.oco_codigo;
+
+
+--
+-- TOC entry 227 (class 1259 OID 21037)
+-- Name: tb_operacaocampo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_operacaocampo (
+    ope_codigo bigint NOT NULL,
+    ope_descricao character varying(100) NOT NULL,
+    ope_datafim timestamp without time zone,
+    ope_datainicio timestamp without time zone,
+    ope_obs character varying(100),
+    ope_arecodigo integer NOT NULL,
+    ope_safcodigo integer NOT NULL,
+    ope_tipcodigo integer NOT NULL,
+    ope_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_operacaocampo OWNER TO api;
+
+--
+-- TOC entry 228 (class 1259 OID 21040)
+-- Name: tb_operacaocampo_ope_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_operacaocampo_ope_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_operacaocampo_ope_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4307 (class 0 OID 0)
+-- Dependencies: 228
+-- Name: tb_operacaocampo_ope_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_operacaocampo_ope_codigo_seq OWNED BY public.tb_operacaocampo.ope_codigo;
+
+
+--
+-- TOC entry 229 (class 1259 OID 21042)
+-- Name: tb_permissao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_permissao (
+    per_codigo bigint NOT NULL,
+    per_dataexpiracao timestamp without time zone,
+    per_datainicio timestamp without time zone NOT NULL,
+    per_autorizadocodigo integer NOT NULL,
+    per_autorizantecodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_permissao OWNER TO api;
+
+--
+-- TOC entry 230 (class 1259 OID 21045)
+-- Name: tb_permissao_per_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_permissao_per_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_permissao_per_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4308 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: tb_permissao_per_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_permissao_per_codigo_seq OWNED BY public.tb_permissao.per_codigo;
+
+
+--
+-- TOC entry 296 (class 1259 OID 50511)
+-- Name: tb_permissaorecurso; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_permissaorecurso (
+    per_codigo bigint NOT NULL,
+    per_delete character(1) NOT NULL,
+    per_select character(1) NOT NULL,
+    per_insert character(1) NOT NULL,
+    per_update character(1) NOT NULL,
+    per_percodigo integer NOT NULL,
+    per_reccodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_permissaorecurso OWNER TO api;
+
+--
+-- TOC entry 295 (class 1259 OID 50509)
+-- Name: tb_permissaorecurso_per_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_permissaorecurso_per_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_permissaorecurso_per_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4309 (class 0 OID 0)
+-- Dependencies: 295
+-- Name: tb_permissaorecurso_per_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_permissaorecurso_per_codigo_seq OWNED BY public.tb_permissaorecurso.per_codigo;
+
+
+--
+-- TOC entry 288 (class 1259 OID 23416)
+-- Name: tb_pixelamostra; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_pixelamostra (
+    pix_codigo bigint NOT NULL,
+    the_geom public.geometry(Point,4326) NOT NULL,
+    pix_amocodigo integer NOT NULL,
+    pix_valor double precision
+);
+
+
+ALTER TABLE public.tb_pixelamostra OWNER TO api;
+
+--
+-- TOC entry 231 (class 1259 OID 21052)
+-- Name: tb_pixelamostra_pix_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_pixelamostra_pix_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_pixelamostra_pix_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4310 (class 0 OID 0)
+-- Dependencies: 231
+-- Name: tb_pixelamostra_pix_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_pixelamostra_pix_codigo_seq OWNED BY public.tb_pixelamostra.pix_codigo;
+
+
+--
+-- TOC entry 289 (class 1259 OID 23422)
+-- Name: tb_pixelmapa; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_pixelmapa (
+    pix_codigo bigint NOT NULL,
+    the_geom public.geometry(Polygon,4326) NOT NULL,
+    pix_valor double precision,
+    pix_mapcodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_pixelmapa OWNER TO api;
+
+--
+-- TOC entry 232 (class 1259 OID 21054)
+-- Name: tb_pixelmapa_pix_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_pixelmapa_pix_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_pixelmapa_pix_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4311 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: tb_pixelmapa_pix_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_pixelmapa_pix_codigo_seq OWNED BY public.tb_pixelmapa.pix_codigo;
+
+
+--
+-- TOC entry 290 (class 1259 OID 23428)
+-- Name: tb_pixelzm; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_pixelzm (
+    pix_codigo bigint NOT NULL,
+    pix_valor double precision,
+    pix_zoncodigo integer NOT NULL,
+    the_geom public.geometry(Polygon,4326)
+);
+
+
+ALTER TABLE public.tb_pixelzm OWNER TO api;
+
+--
+-- TOC entry 233 (class 1259 OID 21056)
+-- Name: tb_pixelzm_pix_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_pixelzm_pix_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_pixelzm_pix_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4312 (class 0 OID 0)
+-- Dependencies: 233
+-- Name: tb_pixelzm_pix_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_pixelzm_pix_codigo_seq OWNED BY public.tb_pixelzm.pix_codigo;
+
+
+--
+-- TOC entry 291 (class 1259 OID 23434)
+-- Name: tb_pontoamostral; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_pontoamostral (
+    pon_codigo bigint NOT NULL,
+    the_geom public.geometry(Point,4326) NOT NULL,
+    pon_gracodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_pontoamostral OWNER TO api;
+
+--
+-- TOC entry 234 (class 1259 OID 21058)
+-- Name: tb_pontoamostral_pon_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_pontoamostral_pon_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_pontoamostral_pon_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4313 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: tb_pontoamostral_pon_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_pontoamostral_pon_codigo_seq OWNED BY public.tb_pontoamostral.pon_codigo;
+
+
+--
+-- TOC entry 235 (class 1259 OID 21060)
+-- Name: tb_precipitacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_precipitacao (
+    pre_codigo bigint NOT NULL,
+    pre_fim timestamp without time zone NOT NULL,
+    pre_inicio timestamp without time zone NOT NULL,
+    pre_obs character varying(100),
+    pre_tipocoleta character varying(100) NOT NULL,
+    pre_volume double precision NOT NULL,
+    pre_arecodigo integer NOT NULL,
+    pre_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_precipitacao OWNER TO api;
+
+--
+-- TOC entry 236 (class 1259 OID 21063)
+-- Name: tb_precipitacao_pre_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_precipitacao_pre_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_precipitacao_pre_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4314 (class 0 OID 0)
+-- Dependencies: 236
+-- Name: tb_precipitacao_pre_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_precipitacao_pre_codigo_seq OWNED BY public.tb_precipitacao.pre_codigo;
+
+
+--
+-- TOC entry 298 (class 1259 OID 50519)
+-- Name: tb_recurso; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_recurso (
+    rec_codigo bigint NOT NULL,
+    rec_chaveprimaria character varying(60) NOT NULL,
+    rec_nomerecurso character varying(100) NOT NULL,
+    rec_colunaidusuario character varying(60) NOT NULL,
+    rec_nometabela character varying(100) NOT NULL,
+    rec_visibilidade character varying(15) NOT NULL
+);
+
+
+ALTER TABLE public.tb_recurso OWNER TO api;
+
+--
+-- TOC entry 297 (class 1259 OID 50517)
+-- Name: tb_recurso_rec_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_recurso_rec_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_recurso_rec_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4315 (class 0 OID 0)
+-- Dependencies: 297
+-- Name: tb_recurso_rec_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_recurso_rec_codigo_seq OWNED BY public.tb_recurso.rec_codigo;
+
+
+--
+-- TOC entry 237 (class 1259 OID 21065)
+-- Name: tb_safra; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_safra (
+    saf_codigo bigint NOT NULL,
+    saf_datacadastro timestamp without time zone NOT NULL,
+    saf_descricao character varying(100) NOT NULL,
+    saf_datafim timestamp without time zone,
+    saf_datainicio timestamp without time zone,
+    saf_culcodigo integer NOT NULL,
+    saf_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_safra OWNER TO api;
+
+--
+-- TOC entry 238 (class 1259 OID 21068)
+-- Name: tb_safra_saf_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_safra_saf_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_safra_saf_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4316 (class 0 OID 0)
+-- Dependencies: 238
+-- Name: tb_safra_saf_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_safra_saf_codigo_seq OWNED BY public.tb_safra.saf_codigo;
+
+
+--
+-- TOC entry 239 (class 1259 OID 21070)
+-- Name: tb_safraarea; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_safraarea (
+    saf_codigo bigint NOT NULL,
+    saf_arecodigo integer NOT NULL,
+    saf_safcodigo integer NOT NULL,
+    saf_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_safraarea OWNER TO api;
+
+--
+-- TOC entry 240 (class 1259 OID 21073)
+-- Name: tb_safraarea_saf_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_safraarea_saf_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_safraarea_saf_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4317 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: tb_safraarea_saf_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_safraarea_saf_codigo_seq OWNED BY public.tb_safraarea.saf_codigo;
+
+
+--
+-- TOC entry 241 (class 1259 OID 21075)
+-- Name: tb_semente; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_semente (
+    sem_codigo bigint NOT NULL,
+    sem_custototal numeric(15,2) NOT NULL,
+    sem_espacamento numeric(10,2) NOT NULL,
+    sem_quantidade numeric(10,2) NOT NULL,
+    sem_opecodigo integer NOT NULL,
+    sem_unicodigo_custototal integer NOT NULL,
+    sem_unicodigo_espacamento integer NOT NULL,
+    sem_unicodigo_quantidade integer NOT NULL,
+    sem_varcodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_semente OWNER TO api;
+
+--
+-- TOC entry 242 (class 1259 OID 21078)
+-- Name: tb_semente_sem_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_semente_sem_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_semente_sem_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4318 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: tb_semente_sem_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_semente_sem_codigo_seq OWNED BY public.tb_semente.sem_codigo;
+
+
+--
+-- TOC entry 243 (class 1259 OID 21080)
+-- Name: tb_solousuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_solousuario (
+    sol_codigo bigint NOT NULL,
+    sol_tipcodigo integer NOT NULL,
+    sol_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_solousuario OWNER TO api;
+
+--
+-- TOC entry 244 (class 1259 OID 21083)
+-- Name: tb_solousuario_sol_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_solousuario_sol_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_solousuario_sol_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4319 (class 0 OID 0)
+-- Dependencies: 244
+-- Name: tb_solousuario_sol_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_solousuario_sol_codigo_seq OWNED BY public.tb_solousuario.sol_codigo;
+
+
+--
+-- TOC entry 304 (class 1259 OID 50576)
+-- Name: tb_tipoocorrencia; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_tipoocorrencia (
+    tip_codigo bigint NOT NULL,
+    tip_descricao character varying(60) NOT NULL,
+    oco_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_tipoocorrencia OWNER TO api;
+
+--
+-- TOC entry 303 (class 1259 OID 50574)
+-- Name: tb_tipoocorrencia_tip_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_tipoocorrencia_tip_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_tipoocorrencia_tip_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4320 (class 0 OID 0)
+-- Dependencies: 303
+-- Name: tb_tipoocorrencia_tip_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_tipoocorrencia_tip_codigo_seq OWNED BY public.tb_tipoocorrencia.tip_codigo;
+
+
+--
+-- TOC entry 316 (class 1259 OID 58562)
+-- Name: tb_tipoocorrenciausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_tipoocorrenciausuario (
+    tip_codigo bigint NOT NULL,
+    tip_tipcodigo integer NOT NULL,
+    tip_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_tipoocorrenciausuario OWNER TO api;
+
+--
+-- TOC entry 315 (class 1259 OID 58560)
+-- Name: tb_tipoocorrenciausuario_tip_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_tipoocorrenciausuario_tip_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_tipoocorrenciausuario_tip_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4321 (class 0 OID 0)
+-- Dependencies: 315
+-- Name: tb_tipoocorrenciausuario_tip_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_tipoocorrenciausuario_tip_codigo_seq OWNED BY public.tb_tipoocorrenciausuario.tip_codigo;
+
+
+--
+-- TOC entry 245 (class 1259 OID 21085)
+-- Name: tb_tipooperacao; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_tipooperacao (
+    tip_codigo bigint NOT NULL,
+    tip_datacadastro date,
+    tip_en_descricao character varying(100),
+    tip_es_descricao character varying(100),
+    tip_pt_descricao character varying(100) NOT NULL,
+    tip_entrega character(1) NOT NULL,
+    tip_funcionario character(1) NOT NULL,
+    tip_insumo character(1) NOT NULL,
+    tip_maquina character(1) NOT NULL,
+    tip_semente character(1) NOT NULL,
+    tip_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_tipooperacao OWNER TO api;
+
+--
+-- TOC entry 246 (class 1259 OID 21088)
+-- Name: tb_tipooperacao_tip_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_tipooperacao_tip_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_tipooperacao_tip_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4322 (class 0 OID 0)
+-- Dependencies: 246
+-- Name: tb_tipooperacao_tip_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_tipooperacao_tip_codigo_seq OWNED BY public.tb_tipooperacao.tip_codigo;
+
+
+--
+-- TOC entry 247 (class 1259 OID 21090)
+-- Name: tb_tipooperacaousuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_tipooperacaousuario (
+    tip_codigo bigint NOT NULL,
+    tip_tipcodigo integer NOT NULL,
+    tip_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_tipooperacaousuario OWNER TO api;
+
+--
+-- TOC entry 248 (class 1259 OID 21093)
+-- Name: tb_tipooperacaousuario_tip_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_tipooperacaousuario_tip_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_tipooperacaousuario_tip_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4323 (class 0 OID 0)
+-- Dependencies: 248
+-- Name: tb_tipooperacaousuario_tip_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_tipooperacaousuario_tip_codigo_seq OWNED BY public.tb_tipooperacaousuario.tip_codigo;
+
+
+--
+-- TOC entry 249 (class 1259 OID 21095)
+-- Name: tb_tiposolo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_tiposolo (
+    tip_codigo bigint NOT NULL,
+    tip_datacadastro date,
+    tip_en_descricao character varying(60),
+    tip_es_descricao character varying(60),
+    tip_pt_descricao character varying(60),
+    tip_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_tiposolo OWNER TO api;
+
+--
+-- TOC entry 250 (class 1259 OID 21098)
+-- Name: tb_tiposolo_tip_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_tiposolo_tip_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_tiposolo_tip_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4324 (class 0 OID 0)
+-- Dependencies: 250
+-- Name: tb_tiposolo_tip_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_tiposolo_tip_codigo_seq OWNED BY public.tb_tiposolo.tip_codigo;
+
+
+--
+-- TOC entry 251 (class 1259 OID 21100)
+-- Name: tb_unidademedida; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_unidademedida (
+    uni_codigo bigint NOT NULL,
+    uni_descricao character varying(60) NOT NULL,
+    uni_sigla character varying(30) NOT NULL,
+    uni_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_unidademedida OWNER TO api;
+
+--
+-- TOC entry 252 (class 1259 OID 21103)
+-- Name: tb_unidademedida_uni_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_unidademedida_uni_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_unidademedida_uni_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4325 (class 0 OID 0)
+-- Dependencies: 252
+-- Name: tb_unidademedida_uni_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_unidademedida_uni_codigo_seq OWNED BY public.tb_unidademedida.uni_codigo;
+
+
+--
+-- TOC entry 253 (class 1259 OID 21105)
+-- Name: tb_unidademedidausuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_unidademedidausuario (
+    uni_codigo bigint NOT NULL,
+    uni_unicodigo integer NOT NULL,
+    uni_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_unidademedidausuario OWNER TO api;
+
+--
+-- TOC entry 254 (class 1259 OID 21108)
+-- Name: tb_unidademedidausuario_uni_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_unidademedidausuario_uni_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_unidademedidausuario_uni_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4326 (class 0 OID 0)
+-- Dependencies: 254
+-- Name: tb_unidademedidausuario_uni_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_unidademedidausuario_uni_codigo_seq OWNED BY public.tb_unidademedidausuario.uni_codigo;
+
+
+--
+-- TOC entry 255 (class 1259 OID 21110)
+-- Name: tb_usuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_usuario (
+    usu_codigo bigint NOT NULL,
+    usu_datacadastro date NOT NULL,
+    usu_dataexpiracao date NOT NULL,
+    usu_email character varying(90),
+    usu_nome character varying(60) NOT NULL,
+    usu_senha character varying(60) NOT NULL,
+    usu_fone character varying(15) NOT NULL
+);
+
+
+ALTER TABLE public.tb_usuario OWNER TO api;
+
+--
+-- TOC entry 256 (class 1259 OID 21113)
+-- Name: tb_usuario_usu_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_usuario_usu_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_usuario_usu_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4327 (class 0 OID 0)
+-- Dependencies: 256
+-- Name: tb_usuario_usu_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_usuario_usu_codigo_seq OWNED BY public.tb_usuario.usu_codigo;
+
+
+--
+-- TOC entry 257 (class 1259 OID 21115)
+-- Name: tb_variedade; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_variedade (
+    var_codigo bigint NOT NULL,
+    var_datacadastro timestamp without time zone NOT NULL,
+    var_descricao character varying(60) NOT NULL,
+    var_marcodigo integer NOT NULL,
+    var_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_variedade OWNER TO api;
+
+--
+-- TOC entry 258 (class 1259 OID 21118)
+-- Name: tb_variedade_var_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_variedade_var_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_variedade_var_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4328 (class 0 OID 0)
+-- Dependencies: 258
+-- Name: tb_variedade_var_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_variedade_var_codigo_seq OWNED BY public.tb_variedade.var_codigo;
+
+
+--
+-- TOC entry 259 (class 1259 OID 21120)
+-- Name: tb_variedadeusuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_variedadeusuario (
+    var_codigo bigint NOT NULL,
+    var_usucodigo integer NOT NULL,
+    var_varcodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_variedadeusuario OWNER TO api;
+
+--
+-- TOC entry 260 (class 1259 OID 21123)
+-- Name: tb_variedadeusuario_var_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_variedadeusuario_var_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_variedadeusuario_var_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4329 (class 0 OID 0)
+-- Dependencies: 260
+-- Name: tb_variedadeusuario_var_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_variedadeusuario_var_codigo_seq OWNED BY public.tb_variedadeusuario.var_codigo;
+
+
+--
+-- TOC entry 261 (class 1259 OID 21125)
+-- Name: tb_veiculo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_veiculo (
+    vei_codigo bigint NOT NULL,
+    vei_descricao character varying(60) NOT NULL,
+    vei_placa character varying(60) NOT NULL,
+    vei_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_veiculo OWNER TO api;
+
+--
+-- TOC entry 262 (class 1259 OID 21128)
+-- Name: tb_veiculo_vei_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_veiculo_vei_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_veiculo_vei_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4330 (class 0 OID 0)
+-- Dependencies: 262
+-- Name: tb_veiculo_vei_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_veiculo_vei_codigo_seq OWNED BY public.tb_veiculo.vei_codigo;
+
+
+--
+-- TOC entry 263 (class 1259 OID 21130)
+-- Name: tb_veiculousuario; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_veiculousuario (
+    vei_codigo bigint NOT NULL,
+    vei_usucodigo integer NOT NULL,
+    vei_veicodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_veiculousuario OWNER TO api;
+
+--
+-- TOC entry 264 (class 1259 OID 21133)
+-- Name: tb_veiculousuario_vei_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_veiculousuario_vei_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_veiculousuario_vei_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4331 (class 0 OID 0)
+-- Dependencies: 264
+-- Name: tb_veiculousuario_vei_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_veiculousuario_vei_codigo_seq OWNED BY public.tb_veiculousuario.vei_codigo;
+
+
+--
+-- TOC entry 265 (class 1259 OID 21135)
+-- Name: tb_zonamanejo; Type: TABLE; Schema: public; Owner: api
+--
+
+CREATE TABLE public.tb_zonamanejo (
+    zon_codigo bigint NOT NULL,
+    zon_data date NOT NULL,
+    zon_descricao character varying(100) NOT NULL,
+    zon_erro double precision,
+    zon_expoente double precision,
+    zon_fpi double precision,
+    zon_metodo character varying(60) NOT NULL,
+    zon_mpe double precision,
+    zon_nometabela character varying(30) NOT NULL,
+    zon_nclasses integer NOT NULL,
+    zon_niteracoes integer,
+    zon_arecodigo integer NOT NULL,
+    zon_usucodigo integer NOT NULL
+);
+
+
+ALTER TABLE public.tb_zonamanejo OWNER TO api;
+
+--
+-- TOC entry 266 (class 1259 OID 21138)
+-- Name: tb_zonamanejo_zon_codigo_seq; Type: SEQUENCE; Schema: public; Owner: api
+--
+
+CREATE SEQUENCE public.tb_zonamanejo_zon_codigo_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.tb_zonamanejo_zon_codigo_seq OWNER TO api;
+
+--
+-- TOC entry 4332 (class 0 OID 0)
+-- Dependencies: 266
+-- Name: tb_zonamanejo_zon_codigo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: api
+--
+
+ALTER SEQUENCE public.tb_zonamanejo_zon_codigo_seq OWNED BY public.tb_zonamanejo.zon_codigo;
+
+
+--
+-- TOC entry 3802 (class 2604 OID 58525)
+-- Name: tb_abrangencianoticia abr_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_abrangencianoticia ALTER COLUMN abr_codigo SET DEFAULT nextval('public.tb_abrangencianoticia_abr_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3748 (class 2604 OID 23506)
+-- Name: tb_agendaoperacao age_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao ALTER COLUMN age_codigo SET DEFAULT nextval('public.tb_agendaoperacao_age_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3749 (class 2604 OID 23507)
+-- Name: tb_amostra amo_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra ALTER COLUMN amo_codigo SET DEFAULT nextval('public.tb_amostra_amo_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3750 (class 2604 OID 23509)
+-- Name: tb_atributo atr_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo ALTER COLUMN atr_codigo SET DEFAULT nextval('public.tb_atributo_atr_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3803 (class 2604 OID 58533)
+-- Name: tb_categorianoticia cat_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticia ALTER COLUMN cat_codigo SET DEFAULT nextval('public.tb_categorianoticia_cat_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3804 (class 2604 OID 58541)
+-- Name: tb_categorianoticiausuario cat_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticiausuario ALTER COLUMN cat_codigo SET DEFAULT nextval('public.tb_categorianoticiausuario_cat_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3751 (class 2604 OID 23510)
+-- Name: tb_classe cla_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classe ALTER COLUMN cla_codigo SET DEFAULT nextval('public.tb_classe_cla_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3752 (class 2604 OID 23511)
+-- Name: tb_classificacao cla_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao ALTER COLUMN cla_codigo SET DEFAULT nextval('public.tb_classificacao_cla_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3753 (class 2604 OID 23512)
+-- Name: tb_cultura cul_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura ALTER COLUMN cul_codigo SET DEFAULT nextval('public.tb_cultura_cul_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3754 (class 2604 OID 23513)
+-- Name: tb_culturausuario cul_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_culturausuario ALTER COLUMN cul_codigo SET DEFAULT nextval('public.tb_culturausuario_cul_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3755 (class 2604 OID 23514)
+-- Name: tb_empresa emp_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresa ALTER COLUMN emp_codigo SET DEFAULT nextval('public.tb_empresa_emp_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3756 (class 2604 OID 23515)
+-- Name: tb_empresausuario emp_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresausuario ALTER COLUMN emp_codigo SET DEFAULT nextval('public.tb_empresausuario_emp_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3757 (class 2604 OID 23516)
+-- Name: tb_entidadeclassificadora ent_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entidadeclassificadora ALTER COLUMN ent_codigo SET DEFAULT nextval('public.tb_entidadeclassificadora_ent_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3758 (class 2604 OID 23517)
+-- Name: tb_entrega ent_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega ALTER COLUMN ent_codigo SET DEFAULT nextval('public.tb_entrega_ent_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3759 (class 2604 OID 23520)
+-- Name: tb_funcionario fun_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionario ALTER COLUMN fun_codigo SET DEFAULT nextval('public.tb_funcionario_fun_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3760 (class 2604 OID 23521)
+-- Name: tb_funcionariooperacao fun_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao ALTER COLUMN fun_codigo SET DEFAULT nextval('public.tb_funcionariooperacao_fun_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3799 (class 2604 OID 50560)
+-- Name: tb_geometriaocorrencia geo_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_geometriaocorrencia ALTER COLUMN geo_codigo SET DEFAULT nextval('public.tb_geometriaocorrencia_geo_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3761 (class 2604 OID 23524)
+-- Name: tb_gradeamostral gra_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_gradeamostral ALTER COLUMN gra_codigo SET DEFAULT nextval('public.tb_gradeamostral_gra_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3762 (class 2604 OID 23527)
+-- Name: tb_insumo ins_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo ALTER COLUMN ins_codigo SET DEFAULT nextval('public.tb_insumo_ins_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3763 (class 2604 OID 23528)
+-- Name: tb_insumooperacao ins_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao ALTER COLUMN ins_codigo SET DEFAULT nextval('public.tb_insumooperacao_ins_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3764 (class 2604 OID 23531)
+-- Name: tb_insumousuario ins_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumousuario ALTER COLUMN ins_codigo SET DEFAULT nextval('public.tb_insumousuario_ins_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3765 (class 2604 OID 23534)
+-- Name: tb_logsafra log_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_logsafra ALTER COLUMN log_codigo SET DEFAULT nextval('public.tb_logsafra_log_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3766 (class 2604 OID 23535)
+-- Name: tb_mapa map_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapa ALTER COLUMN map_codigo SET DEFAULT nextval('public.tb_mapa_map_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3767 (class 2604 OID 23536)
+-- Name: tb_mapazm map_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapazm ALTER COLUMN map_codigo SET DEFAULT nextval('public.tb_mapazm_map_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3768 (class 2604 OID 23537)
+-- Name: tb_maquina maq_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquina ALTER COLUMN maq_codigo SET DEFAULT nextval('public.tb_maquina_maq_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3769 (class 2604 OID 23538)
+-- Name: tb_maquinaoperacao maq_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao ALTER COLUMN maq_codigo SET DEFAULT nextval('public.tb_maquinaoperacao_maq_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3770 (class 2604 OID 23539)
+-- Name: tb_marca mar_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marca ALTER COLUMN mar_codigo SET DEFAULT nextval('public.tb_marca_mar_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3771 (class 2604 OID 23540)
+-- Name: tb_marcausuario mar_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marcausuario ALTER COLUMN mar_codigo SET DEFAULT nextval('public.tb_marcausuario_mar_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3805 (class 2604 OID 58549)
+-- Name: tb_noticia not_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticia ALTER COLUMN not_codigo SET DEFAULT nextval('public.tb_noticia_not_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3806 (class 2604 OID 58557)
+-- Name: tb_noticiausuario not_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticiausuario ALTER COLUMN not_codigo SET DEFAULT nextval('public.tb_noticiausuario_not_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3800 (class 2604 OID 50571)
+-- Name: tb_ocorrencia oco_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia ALTER COLUMN oco_codigo SET DEFAULT nextval('public.tb_ocorrencia_oco_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3772 (class 2604 OID 23542)
+-- Name: tb_operacaocampo ope_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo ALTER COLUMN ope_codigo SET DEFAULT nextval('public.tb_operacaocampo_ope_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3773 (class 2604 OID 23543)
+-- Name: tb_permissao per_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissao ALTER COLUMN per_codigo SET DEFAULT nextval('public.tb_permissao_per_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3797 (class 2604 OID 50514)
+-- Name: tb_permissaorecurso per_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissaorecurso ALTER COLUMN per_codigo SET DEFAULT nextval('public.tb_permissaorecurso_per_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3790 (class 2604 OID 23545)
+-- Name: tb_pixelamostra pix_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelamostra ALTER COLUMN pix_codigo SET DEFAULT nextval('public.tb_pixelamostra_pix_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3791 (class 2604 OID 23546)
+-- Name: tb_pixelmapa pix_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelmapa ALTER COLUMN pix_codigo SET DEFAULT nextval('public.tb_pixelmapa_pix_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3792 (class 2604 OID 23547)
+-- Name: tb_pixelzm pix_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelzm ALTER COLUMN pix_codigo SET DEFAULT nextval('public.tb_pixelzm_pix_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3793 (class 2604 OID 23548)
+-- Name: tb_pontoamostral pon_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pontoamostral ALTER COLUMN pon_codigo SET DEFAULT nextval('public.tb_pontoamostral_pon_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3774 (class 2604 OID 23549)
+-- Name: tb_precipitacao pre_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_precipitacao ALTER COLUMN pre_codigo SET DEFAULT nextval('public.tb_precipitacao_pre_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3798 (class 2604 OID 50522)
+-- Name: tb_recurso rec_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_recurso ALTER COLUMN rec_codigo SET DEFAULT nextval('public.tb_recurso_rec_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3775 (class 2604 OID 23550)
+-- Name: tb_safra saf_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safra ALTER COLUMN saf_codigo SET DEFAULT nextval('public.tb_safra_saf_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3776 (class 2604 OID 23551)
+-- Name: tb_safraarea saf_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safraarea ALTER COLUMN saf_codigo SET DEFAULT nextval('public.tb_safraarea_saf_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3777 (class 2604 OID 23552)
+-- Name: tb_semente sem_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente ALTER COLUMN sem_codigo SET DEFAULT nextval('public.tb_semente_sem_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3778 (class 2604 OID 23553)
+-- Name: tb_solousuario sol_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_solousuario ALTER COLUMN sol_codigo SET DEFAULT nextval('public.tb_solousuario_sol_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3801 (class 2604 OID 50579)
+-- Name: tb_tipoocorrencia tip_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrencia ALTER COLUMN tip_codigo SET DEFAULT nextval('public.tb_tipoocorrencia_tip_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3807 (class 2604 OID 58565)
+-- Name: tb_tipoocorrenciausuario tip_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrenciausuario ALTER COLUMN tip_codigo SET DEFAULT nextval('public.tb_tipoocorrenciausuario_tip_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3779 (class 2604 OID 23554)
+-- Name: tb_tipooperacao tip_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao ALTER COLUMN tip_codigo SET DEFAULT nextval('public.tb_tipooperacao_tip_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3780 (class 2604 OID 23555)
+-- Name: tb_tipooperacaousuario tip_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacaousuario ALTER COLUMN tip_codigo SET DEFAULT nextval('public.tb_tipooperacaousuario_tip_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3781 (class 2604 OID 23556)
+-- Name: tb_tiposolo tip_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo ALTER COLUMN tip_codigo SET DEFAULT nextval('public.tb_tiposolo_tip_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3782 (class 2604 OID 23557)
+-- Name: tb_unidademedida uni_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedida ALTER COLUMN uni_codigo SET DEFAULT nextval('public.tb_unidademedida_uni_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3783 (class 2604 OID 23558)
+-- Name: tb_unidademedidausuario uni_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedidausuario ALTER COLUMN uni_codigo SET DEFAULT nextval('public.tb_unidademedidausuario_uni_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3784 (class 2604 OID 23559)
+-- Name: tb_usuario usu_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_usuario ALTER COLUMN usu_codigo SET DEFAULT nextval('public.tb_usuario_usu_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3785 (class 2604 OID 23560)
+-- Name: tb_variedade var_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedade ALTER COLUMN var_codigo SET DEFAULT nextval('public.tb_variedade_var_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3786 (class 2604 OID 23561)
+-- Name: tb_variedadeusuario var_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedadeusuario ALTER COLUMN var_codigo SET DEFAULT nextval('public.tb_variedadeusuario_var_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3787 (class 2604 OID 23562)
+-- Name: tb_veiculo vei_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculo ALTER COLUMN vei_codigo SET DEFAULT nextval('public.tb_veiculo_vei_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3788 (class 2604 OID 23563)
+-- Name: tb_veiculousuario vei_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculousuario ALTER COLUMN vei_codigo SET DEFAULT nextval('public.tb_veiculousuario_vei_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 3789 (class 2604 OID 23564)
+-- Name: tb_zonamanejo zon_codigo; Type: DEFAULT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_zonamanejo ALTER COLUMN zon_codigo SET DEFAULT nextval('public.tb_zonamanejo_zon_codigo_seq'::regclass);
+
+
+--
+-- TOC entry 4009 (class 2606 OID 58527)
+-- Name: tb_abrangencianoticia tb_abrangencianoticia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_abrangencianoticia
+    ADD CONSTRAINT tb_abrangencianoticia_pkey PRIMARY KEY (abr_codigo);
+
+
+--
+-- TOC entry 3809 (class 2606 OID 21186)
+-- Name: tb_agendaoperacao tb_agendaoperacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT tb_agendaoperacao_pkey PRIMARY KEY (age_codigo);
+
+
+--
+-- TOC entry 3813 (class 2606 OID 21188)
+-- Name: tb_amostra tb_amostra_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra
+    ADD CONSTRAINT tb_amostra_pkey PRIMARY KEY (amo_codigo);
+
+
+--
+-- TOC entry 3981 (class 2606 OID 23566)
+-- Name: tb_area tb_area_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_area
+    ADD CONSTRAINT tb_area_pkey PRIMARY KEY (are_codigo);
+
+
+--
+-- TOC entry 3817 (class 2606 OID 21190)
+-- Name: tb_atributo tb_atributo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT tb_atributo_pkey PRIMARY KEY (atr_codigo);
+
+
+--
+-- TOC entry 4013 (class 2606 OID 58535)
+-- Name: tb_categorianoticia tb_categorianoticia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticia
+    ADD CONSTRAINT tb_categorianoticia_pkey PRIMARY KEY (cat_codigo);
+
+
+--
+-- TOC entry 4017 (class 2606 OID 58543)
+-- Name: tb_categorianoticiausuario tb_categorianoticiausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticiausuario
+    ADD CONSTRAINT tb_categorianoticiausuario_pkey PRIMARY KEY (cat_codigo);
+
+
+--
+-- TOC entry 3821 (class 2606 OID 21192)
+-- Name: tb_classe tb_classe_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classe
+    ADD CONSTRAINT tb_classe_pkey PRIMARY KEY (cla_codigo);
+
+
+--
+-- TOC entry 3825 (class 2606 OID 21194)
+-- Name: tb_classificacao tb_classificacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT tb_classificacao_pkey PRIMARY KEY (cla_codigo);
+
+
+--
+-- TOC entry 3829 (class 2606 OID 21196)
+-- Name: tb_cultura tb_cultura_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura
+    ADD CONSTRAINT tb_cultura_pkey PRIMARY KEY (cul_codigo);
+
+
+--
+-- TOC entry 3837 (class 2606 OID 21198)
+-- Name: tb_culturausuario tb_culturausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_culturausuario
+    ADD CONSTRAINT tb_culturausuario_pkey PRIMARY KEY (cul_codigo);
+
+
+--
+-- TOC entry 3841 (class 2606 OID 21200)
+-- Name: tb_empresa tb_empresa_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresa
+    ADD CONSTRAINT tb_empresa_pkey PRIMARY KEY (emp_codigo);
+
+
+--
+-- TOC entry 3845 (class 2606 OID 21202)
+-- Name: tb_empresausuario tb_empresausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresausuario
+    ADD CONSTRAINT tb_empresausuario_pkey PRIMARY KEY (emp_codigo);
+
+
+--
+-- TOC entry 3849 (class 2606 OID 21204)
+-- Name: tb_entidadeclassificadora tb_entidadeclassificadora_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entidadeclassificadora
+    ADD CONSTRAINT tb_entidadeclassificadora_pkey PRIMARY KEY (ent_codigo);
+
+
+--
+-- TOC entry 3853 (class 2606 OID 21206)
+-- Name: tb_entrega tb_entrega_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega
+    ADD CONSTRAINT tb_entrega_pkey PRIMARY KEY (ent_codigo);
+
+
+--
+-- TOC entry 3855 (class 2606 OID 21208)
+-- Name: tb_funcionario tb_funcionario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionario
+    ADD CONSTRAINT tb_funcionario_pkey PRIMARY KEY (fun_codigo);
+
+
+--
+-- TOC entry 3859 (class 2606 OID 21210)
+-- Name: tb_funcionariooperacao tb_funcionariooperacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao
+    ADD CONSTRAINT tb_funcionariooperacao_pkey PRIMARY KEY (fun_codigo);
+
+
+--
+-- TOC entry 3999 (class 2606 OID 50565)
+-- Name: tb_geometriaocorrencia tb_geometriaocorrencia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_geometriaocorrencia
+    ADD CONSTRAINT tb_geometriaocorrencia_pkey PRIMARY KEY (geo_codigo);
+
+
+--
+-- TOC entry 3863 (class 2606 OID 21212)
+-- Name: tb_gradeamostral tb_gradeamostral_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_gradeamostral
+    ADD CONSTRAINT tb_gradeamostral_pkey PRIMARY KEY (gra_codigo);
+
+
+--
+-- TOC entry 3867 (class 2606 OID 21214)
+-- Name: tb_insumo tb_insumo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT tb_insumo_pkey PRIMARY KEY (ins_codigo);
+
+
+--
+-- TOC entry 3871 (class 2606 OID 21216)
+-- Name: tb_insumooperacao tb_insumooperacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao
+    ADD CONSTRAINT tb_insumooperacao_pkey PRIMARY KEY (ins_codigo);
+
+
+--
+-- TOC entry 3873 (class 2606 OID 21218)
+-- Name: tb_insumousuario tb_insumousuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumousuario
+    ADD CONSTRAINT tb_insumousuario_pkey PRIMARY KEY (ins_codigo);
+
+
+--
+-- TOC entry 3985 (class 2606 OID 23588)
+-- Name: tb_location tb_location_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_location
+    ADD CONSTRAINT tb_location_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 3987 (class 2606 OID 23590)
+-- Name: tb_logarea tb_logarea_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_logarea
+    ADD CONSTRAINT tb_logarea_pkey PRIMARY KEY (log_codigo);
+
+
+--
+-- TOC entry 3877 (class 2606 OID 21220)
+-- Name: tb_logsafra tb_logsafra_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_logsafra
+    ADD CONSTRAINT tb_logsafra_pkey PRIMARY KEY (log_codigo);
+
+
+--
+-- TOC entry 3879 (class 2606 OID 21222)
+-- Name: tb_mapa tb_mapa_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapa
+    ADD CONSTRAINT tb_mapa_pkey PRIMARY KEY (map_codigo);
+
+
+--
+-- TOC entry 3881 (class 2606 OID 21224)
+-- Name: tb_mapazm tb_mapazm_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapazm
+    ADD CONSTRAINT tb_mapazm_pkey PRIMARY KEY (map_codigo);
+
+
+--
+-- TOC entry 3885 (class 2606 OID 21226)
+-- Name: tb_maquina tb_maquina_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquina
+    ADD CONSTRAINT tb_maquina_pkey PRIMARY KEY (maq_codigo);
+
+
+--
+-- TOC entry 3889 (class 2606 OID 21228)
+-- Name: tb_maquinaoperacao tb_maquinaoperacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao
+    ADD CONSTRAINT tb_maquinaoperacao_pkey PRIMARY KEY (maq_codigo);
+
+
+--
+-- TOC entry 3891 (class 2606 OID 21230)
+-- Name: tb_marca tb_marca_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marca
+    ADD CONSTRAINT tb_marca_pkey PRIMARY KEY (mar_codigo);
+
+
+--
+-- TOC entry 3895 (class 2606 OID 21232)
+-- Name: tb_marcausuario tb_marcausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marcausuario
+    ADD CONSTRAINT tb_marcausuario_pkey PRIMARY KEY (mar_codigo);
+
+
+--
+-- TOC entry 4021 (class 2606 OID 58551)
+-- Name: tb_noticia tb_noticia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticia
+    ADD CONSTRAINT tb_noticia_pkey PRIMARY KEY (not_codigo);
+
+
+--
+-- TOC entry 4025 (class 2606 OID 58559)
+-- Name: tb_noticiausuario tb_noticiausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticiausuario
+    ADD CONSTRAINT tb_noticiausuario_pkey PRIMARY KEY (not_codigo);
+
+
+--
+-- TOC entry 4003 (class 2606 OID 50573)
+-- Name: tb_ocorrencia tb_ocorrencia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia
+    ADD CONSTRAINT tb_ocorrencia_pkey PRIMARY KEY (oco_codigo);
+
+
+--
+-- TOC entry 3899 (class 2606 OID 21236)
+-- Name: tb_operacaocampo tb_operacaocampo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT tb_operacaocampo_pkey PRIMARY KEY (ope_codigo);
+
+
+--
+-- TOC entry 3903 (class 2606 OID 21238)
+-- Name: tb_permissao tb_permissao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissao
+    ADD CONSTRAINT tb_permissao_pkey PRIMARY KEY (per_codigo);
+
+
+--
+-- TOC entry 3989 (class 2606 OID 50516)
+-- Name: tb_permissaorecurso tb_permissaorecurso_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissaorecurso
+    ADD CONSTRAINT tb_permissaorecurso_pkey PRIMARY KEY (per_codigo);
+
+
+--
+-- TOC entry 3973 (class 2606 OID 23519)
+-- Name: tb_pixelamostra tb_pixelamostra_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelamostra
+    ADD CONSTRAINT tb_pixelamostra_pkey PRIMARY KEY (pix_codigo);
+
+
+--
+-- TOC entry 3975 (class 2606 OID 23523)
+-- Name: tb_pixelmapa tb_pixelmapa_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelmapa
+    ADD CONSTRAINT tb_pixelmapa_pkey PRIMARY KEY (pix_codigo);
+
+
+--
+-- TOC entry 3977 (class 2606 OID 23526)
+-- Name: tb_pixelzm tb_pixelzm_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelzm
+    ADD CONSTRAINT tb_pixelzm_pkey PRIMARY KEY (pix_codigo);
+
+
+--
+-- TOC entry 3979 (class 2606 OID 23530)
+-- Name: tb_pontoamostral tb_pontoamostral_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pontoamostral
+    ADD CONSTRAINT tb_pontoamostral_pkey PRIMARY KEY (pon_codigo);
+
+
+--
+-- TOC entry 3907 (class 2606 OID 21242)
+-- Name: tb_precipitacao tb_precipitacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_precipitacao
+    ADD CONSTRAINT tb_precipitacao_pkey PRIMARY KEY (pre_codigo);
+
+
+--
+-- TOC entry 3993 (class 2606 OID 50524)
+-- Name: tb_recurso tb_recurso_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_recurso
+    ADD CONSTRAINT tb_recurso_pkey PRIMARY KEY (rec_codigo);
+
+
+--
+-- TOC entry 3909 (class 2606 OID 21244)
+-- Name: tb_safra tb_safra_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safra
+    ADD CONSTRAINT tb_safra_pkey PRIMARY KEY (saf_codigo);
+
+
+--
+-- TOC entry 3913 (class 2606 OID 21246)
+-- Name: tb_safraarea tb_safraarea_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safraarea
+    ADD CONSTRAINT tb_safraarea_pkey PRIMARY KEY (saf_codigo);
+
+
+--
+-- TOC entry 3915 (class 2606 OID 21248)
+-- Name: tb_semente tb_semente_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT tb_semente_pkey PRIMARY KEY (sem_codigo);
+
+
+--
+-- TOC entry 3917 (class 2606 OID 21250)
+-- Name: tb_solousuario tb_solousuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_solousuario
+    ADD CONSTRAINT tb_solousuario_pkey PRIMARY KEY (sol_codigo);
+
+
+--
+-- TOC entry 4007 (class 2606 OID 50581)
+-- Name: tb_tipoocorrencia tb_tipoocorrencia_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrencia
+    ADD CONSTRAINT tb_tipoocorrencia_pkey PRIMARY KEY (tip_codigo);
+
+
+--
+-- TOC entry 4029 (class 2606 OID 58567)
+-- Name: tb_tipoocorrenciausuario tb_tipoocorrenciausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrenciausuario
+    ADD CONSTRAINT tb_tipoocorrenciausuario_pkey PRIMARY KEY (tip_codigo);
+
+
+--
+-- TOC entry 3921 (class 2606 OID 21252)
+-- Name: tb_tipooperacao tb_tipooperacao_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao
+    ADD CONSTRAINT tb_tipooperacao_pkey PRIMARY KEY (tip_codigo);
+
+
+--
+-- TOC entry 3929 (class 2606 OID 21254)
+-- Name: tb_tipooperacaousuario tb_tipooperacaousuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacaousuario
+    ADD CONSTRAINT tb_tipooperacaousuario_pkey PRIMARY KEY (tip_codigo);
+
+
+--
+-- TOC entry 3933 (class 2606 OID 21256)
+-- Name: tb_tiposolo tb_tiposolo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo
+    ADD CONSTRAINT tb_tiposolo_pkey PRIMARY KEY (tip_codigo);
+
+
+--
+-- TOC entry 3941 (class 2606 OID 21258)
+-- Name: tb_unidademedida tb_unidademedida_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedida
+    ADD CONSTRAINT tb_unidademedida_pkey PRIMARY KEY (uni_codigo);
+
+
+--
+-- TOC entry 3945 (class 2606 OID 21260)
+-- Name: tb_unidademedidausuario tb_unidademedidausuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedidausuario
+    ADD CONSTRAINT tb_unidademedidausuario_pkey PRIMARY KEY (uni_codigo);
+
+
+--
+-- TOC entry 3949 (class 2606 OID 21262)
+-- Name: tb_usuario tb_usuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_usuario
+    ADD CONSTRAINT tb_usuario_pkey PRIMARY KEY (usu_codigo);
+
+
+--
+-- TOC entry 3955 (class 2606 OID 21264)
+-- Name: tb_variedade tb_variedade_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedade
+    ADD CONSTRAINT tb_variedade_pkey PRIMARY KEY (var_codigo);
+
+
+--
+-- TOC entry 3959 (class 2606 OID 21266)
+-- Name: tb_variedadeusuario tb_variedadeusuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedadeusuario
+    ADD CONSTRAINT tb_variedadeusuario_pkey PRIMARY KEY (var_codigo);
+
+
+--
+-- TOC entry 3963 (class 2606 OID 21268)
+-- Name: tb_veiculo tb_veiculo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculo
+    ADD CONSTRAINT tb_veiculo_pkey PRIMARY KEY (vei_codigo);
+
+
+--
+-- TOC entry 3967 (class 2606 OID 21270)
+-- Name: tb_veiculousuario tb_veiculousuario_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculousuario
+    ADD CONSTRAINT tb_veiculousuario_pkey PRIMARY KEY (vei_codigo);
+
+
+--
+-- TOC entry 3971 (class 2606 OID 21272)
+-- Name: tb_zonamanejo tb_zonamanejo_pkey; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_zonamanejo
+    ADD CONSTRAINT tb_zonamanejo_pkey PRIMARY KEY (zon_codigo);
+
+
+--
+-- TOC entry 3995 (class 2606 OID 50540)
+-- Name: tb_recurso uk_4b0l08f7ilk9uj246vrgilbkt; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_recurso
+    ADD CONSTRAINT uk_4b0l08f7ilk9uj246vrgilbkt UNIQUE (rec_nometabela);
+
+
+--
+-- TOC entry 4011 (class 2606 OID 58569)
+-- Name: tb_abrangencianoticia uk_abrangencianoticia; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_abrangencianoticia
+    ADD CONSTRAINT uk_abrangencianoticia UNIQUE (abr_descricao, abr_notcodigo);
+
+
+--
+-- TOC entry 3811 (class 2606 OID 21276)
+-- Name: tb_agendaoperacao uk_agendaoperacao; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT uk_agendaoperacao UNIQUE (age_descricao, age_tipcodigo, age_dataprevisaooperacao, age_safcodigo, age_arecodigo);
+
+
+--
+-- TOC entry 3815 (class 2606 OID 21278)
+-- Name: tb_amostra uk_amostra; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra
+    ADD CONSTRAINT uk_amostra UNIQUE (amo_descricao, amo_atrcodigo, amo_usucodigo, amo_arecodigo);
+
+
+--
+-- TOC entry 3983 (class 2606 OID 23592)
+-- Name: tb_area uk_area; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_area
+    ADD CONSTRAINT uk_area UNIQUE (are_descricao, are_usucodigo);
+
+
+--
+-- TOC entry 3819 (class 2606 OID 21280)
+-- Name: tb_atributo uk_atributo; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT uk_atributo UNIQUE (atr_pt_descricao, atr_pt_sigla, atr_pt_unicodigo);
+
+
+--
+-- TOC entry 4015 (class 2606 OID 58576)
+-- Name: tb_categorianoticia uk_categorianoticia; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticia
+    ADD CONSTRAINT uk_categorianoticia UNIQUE (cat_descricao, cat_usucodigo);
+
+
+--
+-- TOC entry 4019 (class 2606 OID 58583)
+-- Name: tb_categorianoticiausuario uk_categorianoticiausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticiausuario
+    ADD CONSTRAINT uk_categorianoticiausuario UNIQUE (cat_catcodigo, cat_usucodigo);
+
+
+--
+-- TOC entry 3823 (class 2606 OID 21282)
+-- Name: tb_classe uk_classe; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classe
+    ADD CONSTRAINT uk_classe UNIQUE (cla_nivel, cla_clacodigo);
+
+
+--
+-- TOC entry 3827 (class 2606 OID 21284)
+-- Name: tb_classificacao uk_classificacao; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT uk_classificacao UNIQUE (cla_entcodigo, cla_atrcodigo, cla_tipcodigo);
+
+
+--
+-- TOC entry 3831 (class 2606 OID 21286)
+-- Name: tb_cultura uk_cultura_en; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura
+    ADD CONSTRAINT uk_cultura_en UNIQUE (cul_en_descricao);
+
+
+--
+-- TOC entry 3833 (class 2606 OID 21288)
+-- Name: tb_cultura uk_cultura_es; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura
+    ADD CONSTRAINT uk_cultura_es UNIQUE (cul_es_descricao);
+
+
+--
+-- TOC entry 3835 (class 2606 OID 21290)
+-- Name: tb_cultura uk_cultura_pt; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura
+    ADD CONSTRAINT uk_cultura_pt UNIQUE (cul_pt_descricao);
+
+
+--
+-- TOC entry 3839 (class 2606 OID 21292)
+-- Name: tb_culturausuario uk_culturausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_culturausuario
+    ADD CONSTRAINT uk_culturausuario UNIQUE (cul_usucodigo, cul_culcodigo);
+
+
+--
+-- TOC entry 3843 (class 2606 OID 21294)
+-- Name: tb_empresa uk_empresa; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresa
+    ADD CONSTRAINT uk_empresa UNIQUE (emp_nome, emp_estado, emp_cidade, emp_usucodigo);
+
+
+--
+-- TOC entry 3847 (class 2606 OID 21296)
+-- Name: tb_empresausuario uk_empresausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresausuario
+    ADD CONSTRAINT uk_empresausuario UNIQUE (emp_usucodigo, emp_empcodigo);
+
+
+--
+-- TOC entry 3851 (class 2606 OID 21298)
+-- Name: tb_entidadeclassificadora uk_entidadeclassificadora; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entidadeclassificadora
+    ADD CONSTRAINT uk_entidadeclassificadora UNIQUE (ent_descricao, ent_cidade);
+
+
+--
+-- TOC entry 3857 (class 2606 OID 21300)
+-- Name: tb_funcionario uk_funcionario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionario
+    ADD CONSTRAINT uk_funcionario UNIQUE (fun_nome, fun_usucodigo);
+
+
+--
+-- TOC entry 3861 (class 2606 OID 21302)
+-- Name: tb_funcionariooperacao uk_funcionariooperacao; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao
+    ADD CONSTRAINT uk_funcionariooperacao UNIQUE (fun_funcao, fun_opecodigo);
+
+
+--
+-- TOC entry 4001 (class 2606 OID 50583)
+-- Name: tb_geometriaocorrencia uk_geometria; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_geometriaocorrencia
+    ADD CONSTRAINT uk_geometria UNIQUE (geo_obs, geo_ococodigo);
+
+
+--
+-- TOC entry 3865 (class 2606 OID 21304)
+-- Name: tb_gradeamostral uk_gradeamostral; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_gradeamostral
+    ADD CONSTRAINT uk_gradeamostral UNIQUE (gra_descricao, gra_tamx, gra_tamy, gra_arecodigo);
+
+
+--
+-- TOC entry 3869 (class 2606 OID 21306)
+-- Name: tb_insumo uk_insumo; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT uk_insumo UNIQUE (ins_descricao, ins_marcodigo, ins_usucodigo);
+
+
+--
+-- TOC entry 3875 (class 2606 OID 21308)
+-- Name: tb_insumousuario uk_insumousuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumousuario
+    ADD CONSTRAINT uk_insumousuario UNIQUE (ins_inscodigo, ins_usucodigo);
+
+
+--
+-- TOC entry 3883 (class 2606 OID 21310)
+-- Name: tb_mapazm uk_mapazm; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapazm
+    ADD CONSTRAINT uk_mapazm UNIQUE (map_mapcodigo, map_zoncodigo);
+
+
+--
+-- TOC entry 3887 (class 2606 OID 21312)
+-- Name: tb_maquina uk_maquina; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquina
+    ADD CONSTRAINT uk_maquina UNIQUE (maq_descricao, maq_ano, maq_usucodigo);
+
+
+--
+-- TOC entry 3893 (class 2606 OID 21314)
+-- Name: tb_marca uk_marca; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marca
+    ADD CONSTRAINT uk_marca UNIQUE (mar_descricao, mar_usucodigo);
+
+
+--
+-- TOC entry 3897 (class 2606 OID 21316)
+-- Name: tb_marcausuario uk_marcausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marcausuario
+    ADD CONSTRAINT uk_marcausuario UNIQUE (mar_usucodigo, mar_marcodigo);
+
+
+--
+-- TOC entry 4023 (class 2606 OID 58595)
+-- Name: tb_noticia uk_noticia; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticia
+    ADD CONSTRAINT uk_noticia UNIQUE (not_descricao, not_catcodigo, not_usucodigo);
+
+
+--
+-- TOC entry 4027 (class 2606 OID 58607)
+-- Name: tb_noticiausuario uk_noticiausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticiausuario
+    ADD CONSTRAINT uk_noticiausuario UNIQUE (not_notcodigo, not_usucodigo);
+
+
+--
+-- TOC entry 4005 (class 2606 OID 50590)
+-- Name: tb_ocorrencia uk_ocorrencia; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia
+    ADD CONSTRAINT uk_ocorrencia UNIQUE (oco_descricao, oco_tipcodigo, oco_arecodigo);
+
+
+--
+-- TOC entry 3901 (class 2606 OID 21318)
+-- Name: tb_operacaocampo uk_operacaocampo; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT uk_operacaocampo UNIQUE (ope_descricao, ope_datainicio, ope_usucodigo, ope_tipcodigo, ope_safcodigo, ope_arecodigo);
+
+
+--
+-- TOC entry 3905 (class 2606 OID 21320)
+-- Name: tb_permissao uk_permissao; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissao
+    ADD CONSTRAINT uk_permissao UNIQUE (per_autorizadocodigo, per_autorizantecodigo);
+
+
+--
+-- TOC entry 3991 (class 2606 OID 50526)
+-- Name: tb_permissaorecurso uk_permissaorecurso; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissaorecurso
+    ADD CONSTRAINT uk_permissaorecurso UNIQUE (per_reccodigo, per_percodigo);
+
+
+--
+-- TOC entry 3997 (class 2606 OID 50538)
+-- Name: tb_recurso uk_recurso; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_recurso
+    ADD CONSTRAINT uk_recurso UNIQUE (rec_nomerecurso);
+
+
+--
+-- TOC entry 3911 (class 2606 OID 21324)
+-- Name: tb_safra uk_safra; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safra
+    ADD CONSTRAINT uk_safra UNIQUE (saf_descricao, saf_culcodigo, saf_usucodigo);
+
+
+--
+-- TOC entry 3935 (class 2606 OID 21326)
+-- Name: tb_tiposolo uk_solodescricaoen; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo
+    ADD CONSTRAINT uk_solodescricaoen UNIQUE (tip_en_descricao);
+
+
+--
+-- TOC entry 3937 (class 2606 OID 21328)
+-- Name: tb_tiposolo uk_solodescricaoes; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo
+    ADD CONSTRAINT uk_solodescricaoes UNIQUE (tip_es_descricao);
+
+
+--
+-- TOC entry 3939 (class 2606 OID 21330)
+-- Name: tb_tiposolo uk_solodescricaopt; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo
+    ADD CONSTRAINT uk_solodescricaopt UNIQUE (tip_pt_descricao);
+
+
+--
+-- TOC entry 3919 (class 2606 OID 21332)
+-- Name: tb_solousuario uk_solousuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_solousuario
+    ADD CONSTRAINT uk_solousuario UNIQUE (sol_usucodigo, sol_tipcodigo);
+
+
+--
+-- TOC entry 4031 (class 2606 OID 58629)
+-- Name: tb_tipoocorrenciausuario uk_tipoocorrenciausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrenciausuario
+    ADD CONSTRAINT uk_tipoocorrenciausuario UNIQUE (tip_usucodigo, tip_tipcodigo);
+
+
+--
+-- TOC entry 3923 (class 2606 OID 21334)
+-- Name: tb_tipooperacao uk_tipooperacao1; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao
+    ADD CONSTRAINT uk_tipooperacao1 UNIQUE (tip_pt_descricao, tip_usucodigo);
+
+
+--
+-- TOC entry 3925 (class 2606 OID 21336)
+-- Name: tb_tipooperacao uk_tipooperacao2; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao
+    ADD CONSTRAINT uk_tipooperacao2 UNIQUE (tip_en_descricao, tip_usucodigo);
+
+
+--
+-- TOC entry 3927 (class 2606 OID 21338)
+-- Name: tb_tipooperacao uk_tipooperacao3; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao
+    ADD CONSTRAINT uk_tipooperacao3 UNIQUE (tip_es_descricao, tip_usucodigo);
+
+
+--
+-- TOC entry 3931 (class 2606 OID 21340)
+-- Name: tb_tipooperacaousuario uk_tipooperacaousuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacaousuario
+    ADD CONSTRAINT uk_tipooperacaousuario UNIQUE (tip_usucodigo, tip_tipcodigo);
+
+
+--
+-- TOC entry 3943 (class 2606 OID 21342)
+-- Name: tb_unidademedida uk_unidademedida; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedida
+    ADD CONSTRAINT uk_unidademedida UNIQUE (uni_descricao);
+
+
+--
+-- TOC entry 3947 (class 2606 OID 21344)
+-- Name: tb_unidademedidausuario uk_unidademedidausuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedidausuario
+    ADD CONSTRAINT uk_unidademedidausuario UNIQUE (uni_usucodigo, uni_unicodigo);
+
+
+--
+-- TOC entry 3951 (class 2606 OID 21346)
+-- Name: tb_usuario uk_usuarioemail; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_usuario
+    ADD CONSTRAINT uk_usuarioemail UNIQUE (usu_email);
+
+
+--
+-- TOC entry 3953 (class 2606 OID 21348)
+-- Name: tb_usuario uk_usuariofone; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_usuario
+    ADD CONSTRAINT uk_usuariofone UNIQUE (usu_fone);
+
+
+--
+-- TOC entry 3957 (class 2606 OID 21350)
+-- Name: tb_variedade uk_variedade; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedade
+    ADD CONSTRAINT uk_variedade UNIQUE (var_descricao, var_marcodigo, var_usucodigo);
+
+
+--
+-- TOC entry 3961 (class 2606 OID 21352)
+-- Name: tb_variedadeusuario uk_variedadeusuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedadeusuario
+    ADD CONSTRAINT uk_variedadeusuario UNIQUE (var_usucodigo, var_varcodigo);
+
+
+--
+-- TOC entry 3965 (class 2606 OID 21354)
+-- Name: tb_veiculo uk_veiculo; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculo
+    ADD CONSTRAINT uk_veiculo UNIQUE (vei_placa, vei_usucodigo, vei_descricao);
+
+
+--
+-- TOC entry 3969 (class 2606 OID 21356)
+-- Name: tb_veiculousuario uk_veiculousuario; Type: CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculousuario
+    ADD CONSTRAINT uk_veiculousuario UNIQUE (vei_usucodigo, vei_veicodigo);
+
+
+--
+-- TOC entry 4139 (class 2606 OID 58570)
+-- Name: tb_abrangencianoticia fk_abrangencianoticia_noticia; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_abrangencianoticia
+    ADD CONSTRAINT fk_abrangencianoticia_noticia FOREIGN KEY (abr_notcodigo) REFERENCES public.tb_noticia(not_codigo);
+
+
+--
+-- TOC entry 4035 (class 2606 OID 23593)
+-- Name: tb_agendaoperacao fk_agendaoperacao_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT fk_agendaoperacao_area FOREIGN KEY (age_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4032 (class 2606 OID 21357)
+-- Name: tb_agendaoperacao fk_agendaoperacao_safra; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT fk_agendaoperacao_safra FOREIGN KEY (age_safcodigo) REFERENCES public.tb_safra(saf_codigo);
+
+
+--
+-- TOC entry 4033 (class 2606 OID 21362)
+-- Name: tb_agendaoperacao fk_agendaoperacao_tipooperacao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT fk_agendaoperacao_tipooperacao FOREIGN KEY (age_tipcodigo) REFERENCES public.tb_tipooperacao(tip_codigo);
+
+
+--
+-- TOC entry 4034 (class 2606 OID 21367)
+-- Name: tb_agendaoperacao fk_agendaoperacao_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_agendaoperacao
+    ADD CONSTRAINT fk_agendaoperacao_usuario FOREIGN KEY (age_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4076 (class 2606 OID 21372)
+-- Name: tb_mapa fk_amostra_amostra; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapa
+    ADD CONSTRAINT fk_amostra_amostra FOREIGN KEY (map_amocodigo) REFERENCES public.tb_amostra(amo_codigo);
+
+
+--
+-- TOC entry 4038 (class 2606 OID 23598)
+-- Name: tb_amostra fk_amostra_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra
+    ADD CONSTRAINT fk_amostra_area FOREIGN KEY (amo_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4078 (class 2606 OID 23603)
+-- Name: tb_mapa fk_amostra_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapa
+    ADD CONSTRAINT fk_amostra_area FOREIGN KEY (map_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4036 (class 2606 OID 21377)
+-- Name: tb_amostra fk_amostra_atributo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra
+    ADD CONSTRAINT fk_amostra_atributo FOREIGN KEY (amo_atrcodigo) REFERENCES public.tb_atributo(atr_codigo);
+
+
+--
+-- TOC entry 4037 (class 2606 OID 21382)
+-- Name: tb_amostra fk_amostra_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_amostra
+    ADD CONSTRAINT fk_amostra_usuario FOREIGN KEY (amo_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4077 (class 2606 OID 21387)
+-- Name: tb_mapa fk_amostra_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapa
+    ADD CONSTRAINT fk_amostra_usuario FOREIGN KEY (map_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4130 (class 2606 OID 23608)
+-- Name: tb_area fk_area_tiposolo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_area
+    ADD CONSTRAINT fk_area_tiposolo FOREIGN KEY (are_tiposolocodigo) REFERENCES public.tb_tiposolo(tip_codigo);
+
+
+--
+-- TOC entry 4129 (class 2606 OID 23613)
+-- Name: tb_area fk_area_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_area
+    ADD CONSTRAINT fk_area_usuario FOREIGN KEY (are_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4039 (class 2606 OID 21392)
+-- Name: tb_atributo fk_atributo_unidademedidaen; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT fk_atributo_unidademedidaen FOREIGN KEY (atr_en_unicodigo) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4040 (class 2606 OID 21397)
+-- Name: tb_atributo fk_atributo_unidademedidaes; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT fk_atributo_unidademedidaes FOREIGN KEY (atr_es_unicodigo) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4041 (class 2606 OID 21402)
+-- Name: tb_atributo fk_atributo_unidademedidapt; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT fk_atributo_unidademedidapt FOREIGN KEY (atr_pt_unicodigo) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4042 (class 2606 OID 21407)
+-- Name: tb_atributo fk_atributo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_atributo
+    ADD CONSTRAINT fk_atributo_usuario FOREIGN KEY (atr_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4140 (class 2606 OID 58577)
+-- Name: tb_categorianoticia fk_categoria_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticia
+    ADD CONSTRAINT fk_categoria_usuario FOREIGN KEY (cat_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4142 (class 2606 OID 58584)
+-- Name: tb_categorianoticiausuario fk_categorianoticiausuario_categoria; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticiausuario
+    ADD CONSTRAINT fk_categorianoticiausuario_categoria FOREIGN KEY (cat_catcodigo) REFERENCES public.tb_categorianoticia(cat_codigo);
+
+
+--
+-- TOC entry 4141 (class 2606 OID 58589)
+-- Name: tb_categorianoticiausuario fk_categorianoticiausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_categorianoticiausuario
+    ADD CONSTRAINT fk_categorianoticiausuario_usuario FOREIGN KEY (cat_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4043 (class 2606 OID 21412)
+-- Name: tb_classe fk_classe_classificacao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classe
+    ADD CONSTRAINT fk_classe_classificacao FOREIGN KEY (cla_clacodigo) REFERENCES public.tb_classificacao(cla_codigo);
+
+
+--
+-- TOC entry 4044 (class 2606 OID 21417)
+-- Name: tb_classificacao fk_classificacao_atributo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT fk_classificacao_atributo FOREIGN KEY (cla_atrcodigo) REFERENCES public.tb_atributo(atr_codigo);
+
+
+--
+-- TOC entry 4045 (class 2606 OID 21422)
+-- Name: tb_classificacao fk_classificacao_entidadeclassificadora; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT fk_classificacao_entidadeclassificadora FOREIGN KEY (cla_entcodigo) REFERENCES public.tb_entidadeclassificadora(ent_codigo);
+
+
+--
+-- TOC entry 4046 (class 2606 OID 21427)
+-- Name: tb_classificacao fk_classificacao_tiposolo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT fk_classificacao_tiposolo FOREIGN KEY (cla_tipcodigo) REFERENCES public.tb_tiposolo(tip_codigo);
+
+
+--
+-- TOC entry 4047 (class 2606 OID 21432)
+-- Name: tb_classificacao fk_classificacao_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_classificacao
+    ADD CONSTRAINT fk_classificacao_usuario FOREIGN KEY (cla_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4048 (class 2606 OID 21437)
+-- Name: tb_cultura fk_cultura_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_cultura
+    ADD CONSTRAINT fk_cultura_usuario FOREIGN KEY (cul_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4049 (class 2606 OID 21442)
+-- Name: tb_culturausuario fk_culturausuario_cultura; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_culturausuario
+    ADD CONSTRAINT fk_culturausuario_cultura FOREIGN KEY (cul_culcodigo) REFERENCES public.tb_cultura(cul_codigo);
+
+
+--
+-- TOC entry 4050 (class 2606 OID 21447)
+-- Name: tb_culturausuario fk_culturausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_culturausuario
+    ADD CONSTRAINT fk_culturausuario_usuario FOREIGN KEY (cul_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4051 (class 2606 OID 21452)
+-- Name: tb_empresa fk_empresa_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresa
+    ADD CONSTRAINT fk_empresa_usuario FOREIGN KEY (emp_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4052 (class 2606 OID 21457)
+-- Name: tb_empresausuario fk_empresausuario_empresa; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresausuario
+    ADD CONSTRAINT fk_empresausuario_empresa FOREIGN KEY (emp_empcodigo) REFERENCES public.tb_empresa(emp_codigo);
+
+
+--
+-- TOC entry 4053 (class 2606 OID 21462)
+-- Name: tb_empresausuario fk_empresausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_empresausuario
+    ADD CONSTRAINT fk_empresausuario_usuario FOREIGN KEY (emp_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4054 (class 2606 OID 21467)
+-- Name: tb_entidadeclassificadora fk_entidadeclassificadora_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entidadeclassificadora
+    ADD CONSTRAINT fk_entidadeclassificadora_usuario FOREIGN KEY (ent_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4055 (class 2606 OID 21472)
+-- Name: tb_entrega fk_entrega_empresa; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega
+    ADD CONSTRAINT fk_entrega_empresa FOREIGN KEY (ent_empcodigo) REFERENCES public.tb_empresa(emp_codigo);
+
+
+--
+-- TOC entry 4056 (class 2606 OID 21477)
+-- Name: tb_entrega fk_entrega_operacaocampo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega
+    ADD CONSTRAINT fk_entrega_operacaocampo FOREIGN KEY (ent_opecodigo) REFERENCES public.tb_operacaocampo(ope_codigo);
+
+
+--
+-- TOC entry 4057 (class 2606 OID 21482)
+-- Name: tb_entrega fk_entrega_unidademedidaquantidade; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega
+    ADD CONSTRAINT fk_entrega_unidademedidaquantidade FOREIGN KEY (ent_unicodigo_quantidade) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4058 (class 2606 OID 21487)
+-- Name: tb_entrega fk_entrega_veiculo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_entrega
+    ADD CONSTRAINT fk_entrega_veiculo FOREIGN KEY (ent_veicodigo) REFERENCES public.tb_veiculo(vei_codigo);
+
+
+--
+-- TOC entry 4059 (class 2606 OID 21492)
+-- Name: tb_funcionario fk_funcionario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionario
+    ADD CONSTRAINT fk_funcionario_usuario FOREIGN KEY (fun_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4060 (class 2606 OID 21497)
+-- Name: tb_funcionariooperacao fk_funcionariooperacao_funcionario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao
+    ADD CONSTRAINT fk_funcionariooperacao_funcionario FOREIGN KEY (fun_funcodigo) REFERENCES public.tb_funcionario(fun_codigo);
+
+
+--
+-- TOC entry 4061 (class 2606 OID 21502)
+-- Name: tb_funcionariooperacao fk_funcionariooperacao_operacaocampo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao
+    ADD CONSTRAINT fk_funcionariooperacao_operacaocampo FOREIGN KEY (fun_opecodigo) REFERENCES public.tb_operacaocampo(ope_codigo);
+
+
+--
+-- TOC entry 4062 (class 2606 OID 21507)
+-- Name: tb_funcionariooperacao fk_funcionariooperacao_unidademedida; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_funcionariooperacao
+    ADD CONSTRAINT fk_funcionariooperacao_unidademedida FOREIGN KEY (fun_unicodigo) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4134 (class 2606 OID 50584)
+-- Name: tb_geometriaocorrencia fk_geometria_ocorrencia; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_geometriaocorrencia
+    ADD CONSTRAINT fk_geometria_ocorrencia FOREIGN KEY (geo_ococodigo) REFERENCES public.tb_ocorrencia(oco_codigo);
+
+
+--
+-- TOC entry 4064 (class 2606 OID 23618)
+-- Name: tb_gradeamostral fk_gradeamostral_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_gradeamostral
+    ADD CONSTRAINT fk_gradeamostral_area FOREIGN KEY (gra_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4063 (class 2606 OID 21512)
+-- Name: tb_gradeamostral fk_gradeamostral_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_gradeamostral
+    ADD CONSTRAINT fk_gradeamostral_usuario FOREIGN KEY (gra_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4067 (class 2606 OID 38555)
+-- Name: tb_insumo fk_insumo_marca; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT fk_insumo_marca FOREIGN KEY (ins_marcodigo) REFERENCES public.tb_marca(mar_codigo);
+
+
+--
+-- TOC entry 4069 (class 2606 OID 21517)
+-- Name: tb_insumooperacao fk_insumo_unidademedidacusto; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao
+    ADD CONSTRAINT fk_insumo_unidademedidacusto FOREIGN KEY (ins_unicodigo_custototal) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4068 (class 2606 OID 38560)
+-- Name: tb_insumo fk_insumo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT fk_insumo_usuario FOREIGN KEY (ins_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4070 (class 2606 OID 21522)
+-- Name: tb_insumooperacao fk_insumooperacao_insumo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao
+    ADD CONSTRAINT fk_insumooperacao_insumo FOREIGN KEY (ins_inscodigo) REFERENCES public.tb_insumo(ins_codigo);
+
+
+--
+-- TOC entry 4071 (class 2606 OID 21527)
+-- Name: tb_insumooperacao fk_insumooperacao_operacaocampo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao
+    ADD CONSTRAINT fk_insumooperacao_operacaocampo FOREIGN KEY (ins_opecodigo) REFERENCES public.tb_operacaocampo(ope_codigo);
+
+
+--
+-- TOC entry 4072 (class 2606 OID 21532)
+-- Name: tb_insumooperacao fk_insumooperacao_unidademedidaquantidade; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumooperacao
+    ADD CONSTRAINT fk_insumooperacao_unidademedidaquantidade FOREIGN KEY (ins_unicodigo_quantidade) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4073 (class 2606 OID 21537)
+-- Name: tb_insumousuario fk_insumousuario_insumo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumousuario
+    ADD CONSTRAINT fk_insumousuario_insumo FOREIGN KEY (ins_inscodigo) REFERENCES public.tb_insumo(ins_codigo);
+
+
+--
+-- TOC entry 4074 (class 2606 OID 21542)
+-- Name: tb_insumousuario fk_insumousuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumousuario
+    ADD CONSTRAINT fk_insumousuario_usuario FOREIGN KEY (ins_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4131 (class 2606 OID 23623)
+-- Name: tb_logarea fk_logarea_usuarioalteracao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_logarea
+    ADD CONSTRAINT fk_logarea_usuarioalteracao FOREIGN KEY (log_usucodigoalteracao) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4075 (class 2606 OID 21547)
+-- Name: tb_logsafra fk_logsafra_usuarioalteracao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_logsafra
+    ADD CONSTRAINT fk_logsafra_usuarioalteracao FOREIGN KEY (log_usucodigoalteracao) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4079 (class 2606 OID 21552)
+-- Name: tb_mapazm fk_mapazm_mapa; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapazm
+    ADD CONSTRAINT fk_mapazm_mapa FOREIGN KEY (map_mapcodigo) REFERENCES public.tb_mapa(map_codigo);
+
+
+--
+-- TOC entry 4080 (class 2606 OID 21557)
+-- Name: tb_mapazm fk_mapazm_zonamanejo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_mapazm
+    ADD CONSTRAINT fk_mapazm_zonamanejo FOREIGN KEY (map_zoncodigo) REFERENCES public.tb_zonamanejo(zon_codigo);
+
+
+--
+-- TOC entry 4081 (class 2606 OID 21562)
+-- Name: tb_maquina fk_maquina_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquina
+    ADD CONSTRAINT fk_maquina_usuario FOREIGN KEY (maq_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4082 (class 2606 OID 21567)
+-- Name: tb_maquinaoperacao fk_maquinaoperacao_maquina; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao
+    ADD CONSTRAINT fk_maquinaoperacao_maquina FOREIGN KEY (maq_maqcodigo) REFERENCES public.tb_maquina(maq_codigo);
+
+
+--
+-- TOC entry 4083 (class 2606 OID 21572)
+-- Name: tb_maquinaoperacao fk_maquinaoperacao_operacaocampo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao
+    ADD CONSTRAINT fk_maquinaoperacao_operacaocampo FOREIGN KEY (maq_opecodigo) REFERENCES public.tb_operacaocampo(ope_codigo);
+
+
+--
+-- TOC entry 4084 (class 2606 OID 21577)
+-- Name: tb_maquinaoperacao fk_maquinaoperacao_unidademedidacustoaluguel; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao
+    ADD CONSTRAINT fk_maquinaoperacao_unidademedidacustoaluguel FOREIGN KEY (maq_unicodigo_custoaluguel) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4085 (class 2606 OID 21582)
+-- Name: tb_maquinaoperacao fk_maquinaoperacao_unidademedidacustooperacional; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_maquinaoperacao
+    ADD CONSTRAINT fk_maquinaoperacao_unidademedidacustooperacional FOREIGN KEY (maq_unicodigo_custooperacional) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4086 (class 2606 OID 21587)
+-- Name: tb_marca fk_marca_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marca
+    ADD CONSTRAINT fk_marca_usuario FOREIGN KEY (mar_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4065 (class 2606 OID 21592)
+-- Name: tb_insumo fk_marcausuario_marca; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT fk_marcausuario_marca FOREIGN KEY (ins_marcodigo) REFERENCES public.tb_marca(mar_codigo);
+
+
+--
+-- TOC entry 4087 (class 2606 OID 21597)
+-- Name: tb_marcausuario fk_marcausuario_marca; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marcausuario
+    ADD CONSTRAINT fk_marcausuario_marca FOREIGN KEY (mar_marcodigo) REFERENCES public.tb_marca(mar_codigo);
+
+
+--
+-- TOC entry 4066 (class 2606 OID 21602)
+-- Name: tb_insumo fk_marcausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_insumo
+    ADD CONSTRAINT fk_marcausuario_usuario FOREIGN KEY (ins_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4088 (class 2606 OID 21607)
+-- Name: tb_marcausuario fk_marcausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_marcausuario
+    ADD CONSTRAINT fk_marcausuario_usuario FOREIGN KEY (mar_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4114 (class 2606 OID 21612)
+-- Name: tb_unidademedidausuario fk_nidademedidausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedidausuario
+    ADD CONSTRAINT fk_nidademedidausuario_usuario FOREIGN KEY (uni_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4144 (class 2606 OID 58596)
+-- Name: tb_noticia fk_noticia_categoria; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticia
+    ADD CONSTRAINT fk_noticia_categoria FOREIGN KEY (not_catcodigo) REFERENCES public.tb_categorianoticia(cat_codigo);
+
+
+--
+-- TOC entry 4143 (class 2606 OID 58601)
+-- Name: tb_noticia fk_noticia_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticia
+    ADD CONSTRAINT fk_noticia_usuario FOREIGN KEY (not_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4146 (class 2606 OID 58608)
+-- Name: tb_noticiausuario fk_noticiausuario_noticia; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticiausuario
+    ADD CONSTRAINT fk_noticiausuario_noticia FOREIGN KEY (not_notcodigo) REFERENCES public.tb_noticia(not_codigo);
+
+
+--
+-- TOC entry 4145 (class 2606 OID 58613)
+-- Name: tb_noticiausuario fk_noticiausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_noticiausuario
+    ADD CONSTRAINT fk_noticiausuario_usuario FOREIGN KEY (not_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4137 (class 2606 OID 50591)
+-- Name: tb_ocorrencia fk_ocorrencia_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia
+    ADD CONSTRAINT fk_ocorrencia_area FOREIGN KEY (oco_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4136 (class 2606 OID 50596)
+-- Name: tb_ocorrencia fk_ocorrencia_tipoocorrencia; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia
+    ADD CONSTRAINT fk_ocorrencia_tipoocorrencia FOREIGN KEY (oco_tipcodigo) REFERENCES public.tb_tipoocorrencia(tip_codigo);
+
+
+--
+-- TOC entry 4135 (class 2606 OID 58618)
+-- Name: tb_ocorrencia fk_ocorrencia_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_ocorrencia
+    ADD CONSTRAINT fk_ocorrencia_usuario FOREIGN KEY (oco_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4138 (class 2606 OID 58623)
+-- Name: tb_tipoocorrencia fk_ocorrencia_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrencia
+    ADD CONSTRAINT fk_ocorrencia_usuario FOREIGN KEY (oco_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4092 (class 2606 OID 23628)
+-- Name: tb_operacaocampo fk_operacaocampo_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT fk_operacaocampo_area FOREIGN KEY (ope_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4089 (class 2606 OID 21617)
+-- Name: tb_operacaocampo fk_operacaocampo_safra; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT fk_operacaocampo_safra FOREIGN KEY (ope_safcodigo) REFERENCES public.tb_safra(saf_codigo);
+
+
+--
+-- TOC entry 4090 (class 2606 OID 21622)
+-- Name: tb_operacaocampo fk_operacaocampo_tipooperacao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT fk_operacaocampo_tipooperacao FOREIGN KEY (ope_tipcodigo) REFERENCES public.tb_tipooperacao(tip_codigo);
+
+
+--
+-- TOC entry 4091 (class 2606 OID 21627)
+-- Name: tb_operacaocampo fk_operacaocampo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_operacaocampo
+    ADD CONSTRAINT fk_operacaocampo_usuario FOREIGN KEY (ope_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4093 (class 2606 OID 21632)
+-- Name: tb_permissao fk_permissao_autorizado; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissao
+    ADD CONSTRAINT fk_permissao_autorizado FOREIGN KEY (per_autorizadocodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4094 (class 2606 OID 21637)
+-- Name: tb_permissao fk_permissao_autorizante; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissao
+    ADD CONSTRAINT fk_permissao_autorizante FOREIGN KEY (per_autorizantecodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4133 (class 2606 OID 50527)
+-- Name: tb_permissaorecurso fk_permissaorecurso_permissao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissaorecurso
+    ADD CONSTRAINT fk_permissaorecurso_permissao FOREIGN KEY (per_percodigo) REFERENCES public.tb_permissao(per_codigo);
+
+
+--
+-- TOC entry 4132 (class 2606 OID 50532)
+-- Name: tb_permissaorecurso fk_permissaorecurso_recurso; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_permissaorecurso
+    ADD CONSTRAINT fk_permissaorecurso_recurso FOREIGN KEY (per_reccodigo) REFERENCES public.tb_recurso(rec_codigo);
+
+
+--
+-- TOC entry 4125 (class 2606 OID 23567)
+-- Name: tb_pixelamostra fk_pixelamostra_amostra; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelamostra
+    ADD CONSTRAINT fk_pixelamostra_amostra FOREIGN KEY (pix_amocodigo) REFERENCES public.tb_amostra(amo_codigo);
+
+
+--
+-- TOC entry 4126 (class 2606 OID 23572)
+-- Name: tb_pixelmapa fk_pixelmapa_mapa; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelmapa
+    ADD CONSTRAINT fk_pixelmapa_mapa FOREIGN KEY (pix_mapcodigo) REFERENCES public.tb_mapa(map_codigo);
+
+
+--
+-- TOC entry 4127 (class 2606 OID 23577)
+-- Name: tb_pixelzm fk_pixelzonamanejo_zonamanejo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pixelzm
+    ADD CONSTRAINT fk_pixelzonamanejo_zonamanejo FOREIGN KEY (pix_zoncodigo) REFERENCES public.tb_zonamanejo(zon_codigo);
+
+
+--
+-- TOC entry 4128 (class 2606 OID 23582)
+-- Name: tb_pontoamostral fk_pontoamostral_gradeamostral; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_pontoamostral
+    ADD CONSTRAINT fk_pontoamostral_gradeamostral FOREIGN KEY (pon_gracodigo) REFERENCES public.tb_gradeamostral(gra_codigo);
+
+
+--
+-- TOC entry 4096 (class 2606 OID 23633)
+-- Name: tb_precipitacao fk_precipitacao_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_precipitacao
+    ADD CONSTRAINT fk_precipitacao_area FOREIGN KEY (pre_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4095 (class 2606 OID 21652)
+-- Name: tb_precipitacao fk_precipitacao_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_precipitacao
+    ADD CONSTRAINT fk_precipitacao_usuario FOREIGN KEY (pre_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4097 (class 2606 OID 21657)
+-- Name: tb_safra fk_safra_cultura; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safra
+    ADD CONSTRAINT fk_safra_cultura FOREIGN KEY (saf_culcodigo) REFERENCES public.tb_cultura(cul_codigo);
+
+
+--
+-- TOC entry 4098 (class 2606 OID 21662)
+-- Name: tb_safra fk_safra_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safra
+    ADD CONSTRAINT fk_safra_usuario FOREIGN KEY (saf_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4101 (class 2606 OID 23638)
+-- Name: tb_safraarea fk_safraarea_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safraarea
+    ADD CONSTRAINT fk_safraarea_area FOREIGN KEY (saf_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4099 (class 2606 OID 21667)
+-- Name: tb_safraarea fk_safraarea_safra; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safraarea
+    ADD CONSTRAINT fk_safraarea_safra FOREIGN KEY (saf_safcodigo) REFERENCES public.tb_safra(saf_codigo);
+
+
+--
+-- TOC entry 4100 (class 2606 OID 21672)
+-- Name: tb_safraarea fk_safraarea_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_safraarea
+    ADD CONSTRAINT fk_safraarea_usuario FOREIGN KEY (saf_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4102 (class 2606 OID 21677)
+-- Name: tb_semente fk_semente_operacaocampo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT fk_semente_operacaocampo FOREIGN KEY (sem_opecodigo) REFERENCES public.tb_operacaocampo(ope_codigo);
+
+
+--
+-- TOC entry 4103 (class 2606 OID 21682)
+-- Name: tb_semente fk_semente_unidademedidacusto; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT fk_semente_unidademedidacusto FOREIGN KEY (sem_unicodigo_custototal) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4104 (class 2606 OID 21687)
+-- Name: tb_semente fk_semente_unidademedidaespacamento; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT fk_semente_unidademedidaespacamento FOREIGN KEY (sem_unicodigo_espacamento) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4105 (class 2606 OID 21692)
+-- Name: tb_semente fk_semente_unidademedidaquantidade; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT fk_semente_unidademedidaquantidade FOREIGN KEY (sem_unicodigo_quantidade) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4106 (class 2606 OID 21697)
+-- Name: tb_semente fk_semente_varirdade; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_semente
+    ADD CONSTRAINT fk_semente_varirdade FOREIGN KEY (sem_varcodigo) REFERENCES public.tb_variedade(var_codigo);
+
+
+--
+-- TOC entry 4107 (class 2606 OID 21702)
+-- Name: tb_solousuario fk_solousuario_tiposolo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_solousuario
+    ADD CONSTRAINT fk_solousuario_tiposolo FOREIGN KEY (sol_tipcodigo) REFERENCES public.tb_tiposolo(tip_codigo);
+
+
+--
+-- TOC entry 4108 (class 2606 OID 21707)
+-- Name: tb_solousuario fk_solousuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_solousuario
+    ADD CONSTRAINT fk_solousuario_usuario FOREIGN KEY (sol_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4148 (class 2606 OID 58630)
+-- Name: tb_tipoocorrenciausuario fk_tipoocorrenciausuario_tipoocorrencia; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrenciausuario
+    ADD CONSTRAINT fk_tipoocorrenciausuario_tipoocorrencia FOREIGN KEY (tip_tipcodigo) REFERENCES public.tb_tipoocorrencia(tip_codigo);
+
+
+--
+-- TOC entry 4147 (class 2606 OID 58635)
+-- Name: tb_tipoocorrenciausuario fk_tipoocorrenciausuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipoocorrenciausuario
+    ADD CONSTRAINT fk_tipoocorrenciausuario_usuario FOREIGN KEY (tip_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4109 (class 2606 OID 21712)
+-- Name: tb_tipooperacao fk_tipooperacao_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacao
+    ADD CONSTRAINT fk_tipooperacao_usuario FOREIGN KEY (tip_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4110 (class 2606 OID 21717)
+-- Name: tb_tipooperacaousuario fk_tipooperacaousuario_tipooperacao; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacaousuario
+    ADD CONSTRAINT fk_tipooperacaousuario_tipooperacao FOREIGN KEY (tip_tipcodigo) REFERENCES public.tb_tipooperacao(tip_codigo);
+
+
+--
+-- TOC entry 4111 (class 2606 OID 21722)
+-- Name: tb_tipooperacaousuario fk_tipooperacaousuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tipooperacaousuario
+    ADD CONSTRAINT fk_tipooperacaousuario_usuario FOREIGN KEY (tip_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4112 (class 2606 OID 21727)
+-- Name: tb_tiposolo fk_tiposolo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_tiposolo
+    ADD CONSTRAINT fk_tiposolo_usuario FOREIGN KEY (tip_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4113 (class 2606 OID 21732)
+-- Name: tb_unidademedida fk_unidademedida_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedida
+    ADD CONSTRAINT fk_unidademedida_usuario FOREIGN KEY (uni_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4115 (class 2606 OID 21737)
+-- Name: tb_unidademedidausuario fk_unidademedidausuario_unidademedida; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_unidademedidausuario
+    ADD CONSTRAINT fk_unidademedidausuario_unidademedida FOREIGN KEY (uni_unicodigo) REFERENCES public.tb_unidademedida(uni_codigo);
+
+
+--
+-- TOC entry 4116 (class 2606 OID 21742)
+-- Name: tb_variedade fk_variedade_marca; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedade
+    ADD CONSTRAINT fk_variedade_marca FOREIGN KEY (var_marcodigo) REFERENCES public.tb_marca(mar_codigo);
+
+
+--
+-- TOC entry 4117 (class 2606 OID 21747)
+-- Name: tb_variedade fk_variedade_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedade
+    ADD CONSTRAINT fk_variedade_usuario FOREIGN KEY (var_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4118 (class 2606 OID 21752)
+-- Name: tb_variedadeusuario fk_variedadeusuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedadeusuario
+    ADD CONSTRAINT fk_variedadeusuario_usuario FOREIGN KEY (var_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4119 (class 2606 OID 21757)
+-- Name: tb_variedadeusuario fk_variedadeusuario_variedade; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_variedadeusuario
+    ADD CONSTRAINT fk_variedadeusuario_variedade FOREIGN KEY (var_varcodigo) REFERENCES public.tb_variedade(var_codigo);
+
+
+--
+-- TOC entry 4120 (class 2606 OID 21762)
+-- Name: tb_veiculo fk_veiculo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculo
+    ADD CONSTRAINT fk_veiculo_usuario FOREIGN KEY (vei_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4121 (class 2606 OID 21767)
+-- Name: tb_veiculousuario fk_veiculousuario_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculousuario
+    ADD CONSTRAINT fk_veiculousuario_usuario FOREIGN KEY (vei_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4122 (class 2606 OID 21772)
+-- Name: tb_veiculousuario fk_veiculousuario_veiculo; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_veiculousuario
+    ADD CONSTRAINT fk_veiculousuario_veiculo FOREIGN KEY (vei_veicodigo) REFERENCES public.tb_veiculo(vei_codigo);
+
+
+--
+-- TOC entry 4124 (class 2606 OID 23643)
+-- Name: tb_zonamanejo fk_zonamanejo_area; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_zonamanejo
+    ADD CONSTRAINT fk_zonamanejo_area FOREIGN KEY (zon_arecodigo) REFERENCES public.tb_area(are_codigo);
+
+
+--
+-- TOC entry 4123 (class 2606 OID 21777)
+-- Name: tb_zonamanejo fk_zonamanejo_usuario; Type: FK CONSTRAINT; Schema: public; Owner: api
+--
+
+ALTER TABLE ONLY public.tb_zonamanejo
+    ADD CONSTRAINT fk_zonamanejo_usuario FOREIGN KEY (zon_usucodigo) REFERENCES public.tb_usuario(usu_codigo);
+
+
+--
+-- TOC entry 4272 (class 0 OID 0)
+-- Dependencies: 10
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: postgres
+--
+
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON SCHEMA public FROM postgres;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO PUBLIC;
+
+
+-- Completed on 2019-01-31 11:43:52
+
+--
+-- PostgreSQL database dump complete
+--
+
